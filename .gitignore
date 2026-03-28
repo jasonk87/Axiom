@@ -1,0 +1,16 @@
+.axiom/
+.axiom_snapshots/
+.playwright-cli/
+__pycache__/
+*.pyc
+output/
+ui/dist/
+ui/node_modules/
+
+phase3_smoke/
+phase4_repair/
+phase4_smoke/
+phase5_smoke/
+smoke_project/
+smoke_project_2/
+v2_smoke/
