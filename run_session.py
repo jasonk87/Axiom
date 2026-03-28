@@ -42,6 +42,7 @@ from models import (
 )
 from llm_decompose_service import LocalLLMDecomposeService
 from llm_implement_service import LocalLLMImplementService
+from llm_replan_service import LocalLLMReplanService
 from orchestrator import Orchestrator
 from phase_policy import classify_plan_phases
 from permission_manager import PermissionManager
@@ -109,6 +110,16 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
         content=payload.get("content"),
         command=payload.get("command"),
         snapshot_id=payload.get("snapshot_id"),
+        subtasks=[
+            SubTask(
+                action=st["action"],
+                description=st["description"],
+                target_path=st.get("target_path"),
+                command=st.get("command"),
+                result_summary=st.get("result_summary"),
+            )
+            for st in payload.get("subtasks")
+        ] if payload.get("subtasks") is not None else None,
     )
 
 
@@ -821,9 +832,62 @@ class AxiomRunManager:
                     return
 
                 interpretation = interpretation_from_dict(session["task_interpretation"])
-                if interpretation.action == TaskAction.COMPLEX:
+                if interpretation.action == TaskAction.COMPLEX.value:
                     if session["current_subtask_index"] >= len(interpretation.subtasks or []):
-                        self._finalize_session(session)
+                        # Try to replan
+                        replan_service = LocalLLMReplanService(settings=LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict()))
+                        project_root = session["project_root"]
+                        artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+                        scope_manager = ScopeManager(
+                            project_root,
+                            session["request"].get("scopePaths", []),
+                            session["request"].get("protectedPaths", []),
+                        )
+                        verification = verification_from_dict(session["verification"])
+                        repo_index_summary = repo_index_summary_from_dict(session["repo_index_summary"])
+                        project_memory = project_memory_from_dict(session.get("project_memory"))
+
+                        replan_payload, llm_summary = replan_service.generate_replan(
+                            artifact_manager=artifact_manager,
+                            interpretation=interpretation,
+                            completed_subtasks=interpretation.subtasks or [],
+                            scope_manager=scope_manager,
+                            verification=verification,
+                            repo_index_summary=repo_index_summary,
+                            project_memory=project_memory,
+                        )
+
+                        if llm_summary is not None:
+                            for artifact in llm_summary.artifact_references:
+                                candidate = artifact.to_dict()
+                                if candidate not in session["artifact_references"]:
+                                    session["artifact_references"].append(candidate)
+
+                        if replan_payload is None or replan_payload.get("is_complete", True):
+                            self._finalize_session(session)
+                            return
+
+                        # If more work is needed, append subtasks and require decomposition approval again
+                        new_subtasks = [
+                            SubTask(
+                                action=st["action"],
+                                description=st["description"],
+                                target_path=st.get("target_path"),
+                                command=st.get("command"),
+                            ) for st in replan_payload.get("new_subtasks", [])
+                        ]
+
+                        if not new_subtasks:
+                             # Failsafe if it says not complete but gives no tasks
+                             self._finalize_session(session)
+                             return
+
+                        interpretation.subtasks.extend(new_subtasks)
+                        session["task_interpretation"] = interpretation.to_dict()
+                        session["subtasks"] = [st.to_dict() for st in interpretation.subtasks]
+                        session["status"] = RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value
+                        session["activity"].append("Replanning identified additional subtasks needed. Awaiting decomposition approval.")
+                        self._persist_session(session)
                         return
 
                     subtask = interpretation.subtasks[session["current_subtask_index"]]
@@ -839,6 +903,8 @@ class AxiomRunManager:
                              return
 
                          if session["status"] in TERMINAL_RUN_STATUSES:
+                             # Rather than strictly returning, if a subtask fails, we could potentially trigger replan here.
+                             # For now, we follow the simple path of failing if a subtask fails terminally.
                              return
 
                          session["current_subtask_index"] += 1
@@ -1030,6 +1096,17 @@ class AxiomRunManager:
 
          # Once we are done with the inner subtask phase loop, reset the index for the next subtask
          session["subtask_phase_index"] = 0
+
+         # Record result summary
+         if session["step_results"]:
+             last_step = session["step_results"][-1]
+             if "details" in last_step:
+                  subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}. Details: {last_step['details']}"
+             else:
+                  subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}"
+
+             # Update interpretation back to session
+             session["task_interpretation"] = interpretation.to_dict()
 
 
     def _execute_phase(self, session: dict, phase: str) -> None:

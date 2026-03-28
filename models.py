@@ -532,6 +532,7 @@ class SubTask:
     description: str
     target_path: str | None = None
     command: str | None = None
+    result_summary: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

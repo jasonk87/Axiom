@@ -36,6 +36,8 @@ DECOMPOSE_TOP_LEVEL_KEYS = {"subtasks"}
 DECOMPOSE_SUBTASK_KEYS = {"action", "description", "target_path", "command"}
 VALID_DECOMPOSE_ACTIONS = {"create_file", "modify_file", "run_command", "analyze", "restore_snapshot", "unknown"}
 
+REPLAN_TOP_LEVEL_KEYS = {"is_complete", "reasoning", "new_subtasks"}
+
 def parse_json_object(raw_text: str) -> tuple[dict[str, Any] | None, list[LLMValidationIssue]]:
     stripped = raw_text.strip()
     if stripped.startswith("```"):
@@ -90,6 +92,59 @@ def validate_plan_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
         if dependencies is not None:
             if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
                 issues.append(LLMValidationIssue(code="wrong_type", message="Field 'dependencies' must be a list of strings.", path=f"{path}.dependencies"))
+    return issues
+
+def validate_replan_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
+    issues: list[LLMValidationIssue] = []
+    extra_top_level = set(payload.keys()) - REPLAN_TOP_LEVEL_KEYS
+    if extra_top_level:
+        issues.append(LLMValidationIssue(code="extra_keys", message=f"Unexpected top-level keys: {sorted(extra_top_level)}.", path="$"))
+
+    for key in ["is_complete", "reasoning", "new_subtasks"]:
+        if key not in payload:
+             issues.append(LLMValidationIssue(code="missing_required_field", message=f"Missing required field '{key}'.", path=key))
+
+    if issues:
+         return issues
+
+    if not isinstance(payload["is_complete"], bool):
+         issues.append(LLMValidationIssue(code="wrong_type", message="Field 'is_complete' must be a boolean.", path="is_complete"))
+
+    if not isinstance(payload["reasoning"], str):
+         issues.append(LLMValidationIssue(code="wrong_type", message="Field 'reasoning' must be a string.", path="reasoning"))
+
+    new_subtasks = payload.get("new_subtasks")
+    if not isinstance(new_subtasks, list):
+         issues.append(LLMValidationIssue(code="wrong_type", message="Field 'new_subtasks' must be a list.", path="new_subtasks"))
+         return issues
+
+    # Only validate new subtasks structure if they exist
+    if new_subtasks:
+        for index, subtask in enumerate(new_subtasks):
+            path = f"new_subtasks[{index}]"
+            if not isinstance(subtask, dict):
+                issues.append(LLMValidationIssue(code="wrong_type", message="Each subtask must be an object.", path=path))
+                continue
+            extra_keys = set(subtask.keys()) - DECOMPOSE_SUBTASK_KEYS
+            if extra_keys:
+                issues.append(LLMValidationIssue(code="extra_keys", message=f"Unexpected keys: {sorted(extra_keys)}.", path=path))
+            for key in ["action", "description"]:
+                if key not in subtask:
+                    issues.append(LLMValidationIssue(code="missing_required_field", message=f"Missing required field '{key}'.", path=f"{path}.{key}"))
+
+            if "action" in subtask:
+                if not isinstance(subtask["action"], str):
+                     issues.append(LLMValidationIssue(code="wrong_type", message="Field 'action' must be a string.", path=f"{path}.action"))
+                elif subtask["action"] not in VALID_DECOMPOSE_ACTIONS:
+                     issues.append(LLMValidationIssue(code="invalid_value", message=f"Action must be one of {VALID_DECOMPOSE_ACTIONS}.", path=f"{path}.action"))
+
+            if "description" in subtask and not isinstance(subtask["description"], str):
+                 issues.append(LLMValidationIssue(code="wrong_type", message="Field 'description' must be a string.", path=f"{path}.description"))
+
+            for opt_key in ["target_path", "command"]:
+                if opt_key in subtask and subtask[opt_key] is not None and not isinstance(subtask[opt_key], str):
+                     issues.append(LLMValidationIssue(code="wrong_type", message=f"Field '{opt_key}' must be a string or null.", path=f"{path}.{opt_key}"))
+
     return issues
 
 
