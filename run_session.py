@@ -40,6 +40,8 @@ from models import (
     VerificationConfig,
     VerificationProfile,
 )
+from llm_decompose_service import LocalLLMDecomposeService
+from llm_implement_service import LocalLLMImplementService
 from orchestrator import Orchestrator
 from phase_policy import classify_plan_phases
 from permission_manager import PermissionManager
@@ -63,6 +65,8 @@ TERMINAL_RUN_STATUSES = {
     RunStatus.CANCELLED.value,
     RunStatus.DECLINED_PLAN.value,
     RunStatus.DECLINED_PHASE.value,
+    RunStatus.DECLINED_DECOMPOSITION.value,
+    RunStatus.DECLINED_IMPLEMENTATION.value,
     RunStatus.COMPLETED.value,
     RunStatus.FAILED.value,
 }
@@ -547,6 +551,29 @@ class AxiomRunManager:
         preview_manager = PreviewManager(workspace, scope_manager, artifact_manager)
         snapshots = SnapshotManager(project_root)
         interpretation = orchestrator._interpret_task(task)
+
+        if interpretation.action == TaskAction.COMPLEX:
+            if not llm_settings.enabled:
+                interpretation.action = TaskAction.UNKNOWN
+            else:
+                decompose_service = LocalLLMDecomposeService(settings=llm_settings)
+                subtasks, llm_summary = decompose_service.generate_decomposition(
+                    artifact_manager=artifact_manager,
+                    interpretation=interpretation,
+                    scope_manager=scope_manager,
+                    verification=verification,
+                    repo_index_summary=None,
+                    project_memory=project_memory,
+                )
+                if subtasks is not None:
+                    interpretation.subtasks = subtasks
+                else:
+                    interpretation.action = TaskAction.UNKNOWN
+                if llm_summary is not None:
+                    for artifact in llm_summary.artifact_references:
+                        if not any(existing.path == artifact.path for existing in artifact_references):
+                            artifact_references.append(artifact)
+
         change_preview = None
         preview_snapshot_reference = None
         if preview_changes:
@@ -564,16 +591,18 @@ class AxiomRunManager:
             workspace,
             scope_manager,
         )
-        plan, llm_summary, llm_review_summary = orchestrator.build_plan_with_local_llm(
-            mode=mode,
-            interpretation=interpretation,
-            scope_manager=scope_manager,
-            verification=verification,
-            repo_index_summary=repo_index_summary,
-            project_memory=project_memory,
-            artifact_manager=artifact_manager,
-            artifact_references=artifact_references,
-        )
+        plan, llm_summary, llm_review_summary = None, None, None
+        if interpretation.action != TaskAction.COMPLEX:
+            plan, llm_summary, llm_review_summary = orchestrator.build_plan_with_local_llm(
+                mode=mode,
+                interpretation=interpretation,
+                scope_manager=scope_manager,
+                verification=verification,
+                repo_index_summary=repo_index_summary,
+                project_memory=project_memory,
+                artifact_manager=artifact_manager,
+                artifact_references=artifact_references,
+            )
         if plan is not None:
             artifact_references.append(
                 artifact_manager.save_json(
@@ -621,7 +650,7 @@ class AxiomRunManager:
             "project_id": project_id,
             "project_root": project_root,
             "project_name": project["name"],
-            "status": RunStatus.AWAITING_PLAN_APPROVAL.value,
+            "status": RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value if interpretation.action == TaskAction.COMPLEX else RunStatus.AWAITING_PLAN_APPROVAL.value,
             "mode": mode.value,
             "request": payload,
             "approval_mode": approval_mode.value,
@@ -646,6 +675,8 @@ class AxiomRunManager:
             "snapshot_reference": None,
             "preview_snapshot_reference": preview_snapshot_reference.to_dict() if preview_snapshot_reference else None,
             "step_results": [],
+            "subtasks": [st.to_dict() for st in interpretation.subtasks] if interpretation.subtasks else [],
+            "current_subtask_index": 0,
             "phase_results": [],
             "files_read": [],
             "files_modified": [],
@@ -686,6 +717,29 @@ class AxiomRunManager:
         self._start_worker(session_id)
         return self.get_run_state(session_id)
 
+    def approve_decomposition(self, session_id: str) -> dict:
+        session = self._session(session_id)
+        if session["status"] != RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value:
+            raise RuntimeError("Decomposition approval is not pending for this session.")
+        session["status"] = RunStatus.RUNNING.value
+        session["activity"].append("Decomposition approved.")
+        snapshot_reference = SnapshotManager(session["project_root"]).create_snapshot()
+        session["snapshot_reference"] = snapshot_reference.to_dict()
+        session["activity"].append("Workspace snapshot created.")
+        self._persist_session(session)
+        self._start_worker(session_id)
+        return self.get_run_state(session_id)
+
+    def approve_implementation(self, session_id: str) -> dict:
+        session = self._session(session_id)
+        if session["status"] != RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value:
+            raise RuntimeError("Implementation approval is not pending for this session.")
+        session["status"] = RunStatus.RUNNING.value
+        session["activity"].append(f"Implementation for subtask {session['current_subtask_index']} approved.")
+        self._persist_session(session)
+        self._start_worker(session_id)
+        return self.get_run_state(session_id)
+
     def approve_phase(self, session_id: str) -> dict:
         session = self._session(session_id)
         if session["status"] != RunStatus.AWAITING_PHASE_APPROVAL.value or session["pending_phase"] is None:
@@ -701,6 +755,20 @@ class AxiomRunManager:
         if session["status"] != RunStatus.AWAITING_PLAN_APPROVAL.value:
             raise RuntimeError("Plan decline is not pending for this session.")
         self._apply_terminal_status(session, RunStatus.DECLINED_PLAN, "Plan was declined. No execution was performed.", reason)
+        return self.get_run_state(session_id)
+
+    def decline_decomposition(self, session_id: str, reason: str | None = None) -> dict:
+        session = self._session(session_id)
+        if session["status"] != RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value:
+            raise RuntimeError("Decomposition decline is not pending for this session.")
+        self._apply_terminal_status(session, RunStatus.DECLINED_DECOMPOSITION, "Decomposition was declined. No execution was performed.", reason)
+        return self.get_run_state(session_id)
+
+    def decline_implementation(self, session_id: str, reason: str | None = None) -> dict:
+        session = self._session(session_id)
+        if session["status"] != RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value:
+            raise RuntimeError("Implementation decline is not pending for this session.")
+        self._apply_terminal_status(session, RunStatus.DECLINED_IMPLEMENTATION, f"Implementation for subtask {session['current_subtask_index']} was declined.", reason)
         return self.get_run_state(session_id)
 
     def decline_phase(self, session_id: str, reason: str | None = None) -> dict:
@@ -723,7 +791,7 @@ class AxiomRunManager:
         session["cancellation_requested"] = True
         session["cancel_reason"] = reason
         session["_cancellation_event"].set()
-        if session["status"] in {RunStatus.AWAITING_PLAN_APPROVAL.value, RunStatus.AWAITING_PHASE_APPROVAL.value}:
+        if session["status"] in {RunStatus.AWAITING_PLAN_APPROVAL.value, RunStatus.AWAITING_PHASE_APPROVAL.value, RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value, RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value}:
             if session["status"] == RunStatus.AWAITING_PHASE_APPROVAL.value:
                 self._mark_remaining_steps_skipped(
                     session,
@@ -751,6 +819,37 @@ class AxiomRunManager:
             while True:
                 if self._check_cancelled(session):
                     return
+
+                interpretation = interpretation_from_dict(session["task_interpretation"])
+                if interpretation.action == TaskAction.COMPLEX:
+                    if session["current_subtask_index"] >= len(interpretation.subtasks or []):
+                        self._finalize_session(session)
+                        return
+
+                    subtask = interpretation.subtasks[session["current_subtask_index"]]
+                    if session.get("current_subtask_content") is None and session.get("current_subtask_command") is None and subtask.action in {"create_file", "modify_file", "run_command"}:
+                         # We need to implement this subtask
+                         self._generate_and_await_implementation(session, subtask)
+                         return
+                    else:
+                         self._execute_subtask(session, subtask)
+
+                         # If subtask paused for approval, wait for human input
+                         if session["status"] not in {RunStatus.RUNNING.value} and session["status"] not in TERMINAL_RUN_STATUSES:
+                             return
+
+                         if session["status"] in TERMINAL_RUN_STATUSES:
+                             return
+
+                         session["current_subtask_index"] += 1
+                         session["current_subtask_content"] = None
+                         session["current_subtask_command"] = None
+                         if session["current_subtask_index"] < len(interpretation.subtasks or []):
+                             # Start the next subtask by clearing content/command
+                             pass
+                         continue
+
+
                 if session["next_phase_index"] >= len(session["phase_order"]):
                     self._finalize_session(session)
                     return
@@ -779,7 +878,8 @@ class AxiomRunManager:
                 session["next_phase_index"] += 1
                 self._persist_session(session)
         except Exception as error:
-            session["final_execution_result"] = ExecutionResult(success=False, message=str(error), details={}).to_dict()
+            import traceback
+            session["final_execution_result"] = ExecutionResult(success=False, message=str(error), details={"traceback": traceback.format_exc()}).to_dict()
             session["status"] = RunStatus.FAILED.value
             session["activity"].append(f"Run failed unexpectedly: {error}")
             self._persist_session(session)
@@ -799,6 +899,139 @@ class AxiomRunManager:
         )
         return True
 
+    def _generate_and_await_implementation(self, session: dict, subtask) -> None:
+        project_root = session["project_root"]
+        llm_settings = LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict())
+        artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+        scope_manager = ScopeManager(
+            project_root,
+            session["request"].get("scopePaths", []),
+            session["request"].get("protectedPaths", []),
+        )
+        repo_index_summary = repo_index_summary_from_dict(session["repo_index_summary"])
+        project_memory = project_memory_from_dict(session.get("project_memory"))
+
+        existing_content = None
+        if subtask.action in {"modify_file"} and subtask.target_path:
+             workspace = WorkspaceManager(project_root, PermissionSet(**session["permissions"]), scope_manager)
+             target = workspace.resolve_path(subtask.target_path)
+             if target.exists():
+                  existing_content = workspace.read_text(subtask.target_path)
+
+        if subtask.action not in {"create_file", "modify_file", "run_command"}:
+            session["status"] = RunStatus.RUNNING.value
+            self._persist_session(session)
+            return
+
+        implement_service = LocalLLMImplementService(settings=llm_settings)
+        result_payload, llm_summary = implement_service.generate_implementation(
+             artifact_manager=artifact_manager,
+             subtask=subtask,
+             scope_manager=scope_manager,
+             repo_index_summary=repo_index_summary,
+             project_memory=project_memory,
+             existing_content=existing_content,
+        )
+
+        if result_payload is None:
+             self._apply_terminal_status(session, RunStatus.FAILED, f"Failed to generate implementation for subtask: {subtask.description}", None)
+             return
+
+        if subtask.action in {"create_file", "modify_file"}:
+             session["current_subtask_content"] = result_payload
+        else:
+             session["current_subtask_command"] = result_payload
+
+        session["status"] = RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value
+        session["activity"].append(f"Generated implementation for subtask {session['current_subtask_index']}. Awaiting approval.")
+
+        if llm_summary is not None:
+             for artifact in llm_summary.artifact_references:
+                  candidate = artifact.to_dict()
+                  if candidate not in session["artifact_references"]:
+                       session["artifact_references"].append(candidate)
+
+        self._persist_session(session)
+
+    def _execute_subtask(self, session: dict, subtask) -> None:
+         # Construct a task interpretation dynamically from the subtask state
+         import copy
+         from models import TaskAction, TaskInterpretation
+         interpretation = TaskInterpretation(
+             raw_task=subtask.description,
+             summary=subtask.description,
+             action=TaskAction(subtask.action),
+             target_path=subtask.target_path,
+             command=session.get("current_subtask_command") if subtask.action == "run_command" else None,
+             content=session.get("current_subtask_content") if subtask.action in {"create_file", "modify_file"} else None,
+             snapshot_id=None,
+         )
+
+         # Convert into a fake Plan and execution payload to leverage existing logic
+         from planner import Planner
+         project_root = session["project_root"]
+         orchestrator = Orchestrator(project_root)
+         scope_manager = ScopeManager(
+            project_root,
+            session["request"].get("scopePaths", []),
+            session["request"].get("protectedPaths", []),
+         )
+         verification = verification_from_dict(session["verification"])
+         repo_index_summary = repo_index_summary_from_dict(session["repo_index_summary"])
+
+         plan = Planner().build_plan(
+             Mode(session["mode"]),
+             interpretation,
+             scope_manager,
+             verification,
+             repo_index_summary,
+         )
+
+         if plan is None:
+             raise RuntimeError("Could not construct a valid plan for subtask execution")
+
+         session["plan"] = plan.to_dict() # override the session's plan for this subtask to allow _execute_phase to reuse logic
+         phase_order = ["understand", "modify", "verify"]
+
+         # Initialize the subtask phase loop explicitly
+         if "subtask_phase_index" not in session or session["subtask_phase_index"] >= len(phase_order):
+             session["subtask_phase_index"] = 0
+
+         while session["subtask_phase_index"] < len(phase_order):
+             phase = phase_order[session["subtask_phase_index"]]
+
+             # Apply phase policies dynamically if phased approval is enabled
+             policy = next((item for item in session.get("phase_policies", []) if item["phase"] == phase), None)
+             if session["approval_mode"] == ApprovalMode.PHASED.value and policy is not None and policy["approval_required"]:
+                 if session.get("approved_phase") != phase:
+                     session["pending_phase"] = phase
+                     session["status"] = RunStatus.AWAITING_PHASE_APPROVAL.value
+                     session["activity"].append(f"Waiting for approval of phase '{phase}'.")
+                     self._persist_session(session)
+                     return
+                 session["approved_phase"] = None
+
+             if policy is not None and policy["auto_run_allowed"]:
+                 policy["auto_ran"] = True
+                 session["status"] = RunStatus.AUTO_RUNNING_READ_ONLY_PHASE.value
+                 session["activity"].append(
+                     f"Auto-ran phase '{phase}' because it is system-classified as {policy['classification']}."
+                 )
+             else:
+                 session["status"] = RunStatus.RUNNING.value
+
+             self._persist_session(session)
+             self._execute_phase(session, phase)
+
+             if session["status"] in TERMINAL_RUN_STATUSES:
+                  return
+
+             session["subtask_phase_index"] += 1
+
+         # Once we are done with the inner subtask phase loop, reset the index for the next subtask
+         session["subtask_phase_index"] = 0
+
+
     def _execute_phase(self, session: dict, phase: str) -> None:
         plan = plan_from_dict(session["plan"])
         if plan is None:
@@ -812,6 +1045,24 @@ class AxiomRunManager:
         command_policy = CommandPolicyMode(session["command_policy"])
         verification = verification_from_dict(session["verification"])
         interpretation = interpretation_from_dict(session["task_interpretation"])
+        # If it's a COMPLEX action, use the dynamic subtask interpretation we construct inside _execute_subtask
+        # Otherwise, stick to the root interpretation.
+        from models import TaskAction, TaskInterpretation
+        if interpretation.action == TaskAction.COMPLEX.value and interpretation.subtasks:
+            subtask = interpretation.subtasks[session["current_subtask_index"]]
+            interpretation = TaskInterpretation(
+                raw_task=subtask.description,
+                summary=subtask.description,
+                action=TaskAction(subtask.action),
+                target_path=subtask.target_path,
+                command=session.get("current_subtask_command") if subtask.action == "run_command" else None,
+                content=session.get("current_subtask_content") if subtask.action in {"create_file", "modify_file"} else None,
+                snapshot_id=None,
+            )
+        elif interpretation.action == TaskAction.COMPLEX.value:
+            # Fallback to UNKNOWN if decomposition failed or LLM was disabled
+            interpretation.action = TaskAction.UNKNOWN.value
+
         orchestrator = Orchestrator(project_root)
         artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
         scope_manager = ScopeManager(

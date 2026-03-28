@@ -6,7 +6,7 @@ from typing import Callable
 from artifact_manager import ArtifactManager
 from llm_client import LLMProviderError, LLMResponse, LLMSettings, build_provider
 from models import ArtifactReference, LLMActivityEvent, LLMStructuredResult, LLMValidationIssue
-from structured_output import parse_json_object, validate_plan_payload, validate_review_payload
+from structured_output import parse_json_object, validate_plan_payload, validate_review_payload, validate_decompose_payload
 
 
 @dataclass
@@ -57,6 +57,26 @@ class StructuredOutputRetryEngine:
             fallback_message=fallback_message,
             validator=validate_review_payload,
             artifact_prefix="llm_review",
+            initial_events=initial_events,
+            initial_artifacts=initial_artifacts,
+        )
+
+    def generate_decompose_output(
+        self,
+        system_instruction: str,
+        user_instruction: str,
+        fallback_message: str,
+        initial_events: list[LLMActivityEvent] | None = None,
+        initial_artifacts: list[ArtifactReference] | None = None,
+    ) -> StructuredPlanOutput:
+        return self.generate_structured_output(
+            feature="task_decomposition",
+            output_label="task decomposition",
+            system_instruction=system_instruction,
+            user_instruction=user_instruction,
+            fallback_message=fallback_message,
+            validator=validate_decompose_payload,
+            artifact_prefix="llm_decompose",
             initial_events=initial_events,
             initial_artifacts=initial_artifacts,
         )

@@ -37,6 +37,8 @@ class ApprovalMode(str, Enum):
 
 class RunStatus(str, Enum):
     PREPARED = "prepared"
+    AWAITING_DECOMPOSITION_APPROVAL = "awaiting_decomposition_approval"
+    AWAITING_IMPLEMENTATION_APPROVAL = "awaiting_implementation_approval"
     AWAITING_PLAN_APPROVAL = "awaiting_plan_approval"
     AWAITING_PHASE_APPROVAL = "awaiting_phase_approval"
     AUTO_RUNNING_READ_ONLY_PHASE = "auto_running_read_only_phase"
@@ -46,6 +48,8 @@ class RunStatus(str, Enum):
     CANCELLED = "cancelled"
     DECLINED_PLAN = "declined_plan"
     DECLINED_PHASE = "declined_phase"
+    DECLINED_DECOMPOSITION = "declined_decomposition"
+    DECLINED_IMPLEMENTATION = "declined_implementation"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -518,7 +522,19 @@ class TaskAction(str, Enum):
     MODIFY_FILE = "modify_file"
     RUN_COMMAND = "run_command"
     RESTORE_SNAPSHOT = "restore_snapshot"
+    COMPLEX = "complex"
     UNKNOWN = "unknown"
+
+
+@dataclass
+class SubTask:
+    action: str
+    description: str
+    target_path: str | None = None
+    command: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
@@ -530,9 +546,13 @@ class TaskInterpretation:
     content: str | None = None
     command: str | None = None
     snapshot_id: str | None = None
+    subtasks: list[SubTask] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        if self.subtasks:
+            d["subtasks"] = [st.to_dict() for st in self.subtasks]
+        return d
 
 
 @dataclass
