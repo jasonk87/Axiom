@@ -44,12 +44,18 @@ export function SessionStepCard({
                 {actionLabel}
               </button>
             ) : null}
-            <button className="inline-toggle-button" onClick={() => onToggle(id)}>
-              {expanded ? "Collapse" : "Expand"}
-            </button>
+            {children ? (
+              <button className="inline-toggle-button" onClick={() => onToggle(id)}>
+                {expanded ? "Collapse" : "Expand"}
+              </button>
+            ) : null}
           </div>
         </div>
-        {expanded ? <div className="session-step-details">{children}</div> : null}
+        <div className={`session-step-details-wrapper ${expanded ? 'expanded' : ''}`}>
+          <div className="session-step-details">
+            <div style={{ paddingTop: 14 }}>{children}</div>
+          </div>
+        </div>
       </div>
     </article>
   );

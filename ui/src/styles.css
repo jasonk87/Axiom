@@ -12,8 +12,9 @@
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(57, 116, 255, 0.12), transparent 20%),
-    linear-gradient(180deg, #edf2fb 0%, #e6ebf5 100%);
+    radial-gradient(circle at top left, rgba(57, 116, 255, 0.08), transparent 30%),
+    linear-gradient(180deg, #f4f7fc 0%, #e9eef6 100%);
+  color: #1a202c;
 }
 
 body.is-resizing-horizontal,
@@ -27,6 +28,7 @@ input,
 select,
 textarea {
   font: inherit;
+  transition: all 0.2s ease-in-out;
 }
 
 button {
@@ -37,11 +39,20 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid rgba(144, 161, 189, 0.42);
+  border: 1px solid rgba(144, 161, 189, 0.3);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #172033;
-  padding: 11px 13px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #1a202c;
+  padding: 12px 14px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02) inset;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #2f7bff;
+  box-shadow: 0 0 0 3px rgba(47, 123, 255, 0.15);
 }
 
 textarea {
@@ -51,6 +62,7 @@ textarea {
 .codex-shell {
   display: grid;
   min-height: 100vh;
+  transition: grid-template-columns 0.3s ease;
 }
 
 .session-sidebar {
@@ -101,11 +113,23 @@ textarea {
 .sidebar-project-dot,
 .mini-icon-button,
 .advanced-toggle-button {
-  border: 1px solid rgba(190, 201, 222, 0.88);
+  border: 1px solid rgba(190, 201, 222, 0.6);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.9);
   color: #33415d;
-  padding: 10px 12px;
+  padding: 10px 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.ghost-button:hover,
+.artifact-pill:hover,
+.advanced-toggle-button:hover {
+  background: #fff;
+  border-color: #2f7bff;
+  color: #2f7bff;
+  box-shadow: 0 4px 8px rgba(47, 123, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 .new-task-button,
@@ -113,17 +137,33 @@ textarea {
 .primary-button {
   border: 0;
   border-radius: 12px;
-  padding: 12px 16px;
+  padding: 12px 18px;
   color: #fff;
-  background: linear-gradient(180deg, #2f7bff 0%, #1f5ed1 100%);
-  box-shadow: 0 10px 22px rgba(47, 123, 255, 0.25);
+  background: linear-gradient(180deg, #2f7bff 0%, #1a51d1 100%);
+  box-shadow: 0 8px 16px rgba(47, 123, 255, 0.25), inset 0 1px 1px rgba(255,255,255,0.2);
+  font-weight: 600;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+}
+
+.new-task-button:hover,
+.run-button:hover:not(:disabled),
+.primary-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4387ff 0%, #225ce6 100%);
+  box-shadow: 0 10px 24px rgba(47, 123, 255, 0.35), inset 0 1px 1px rgba(255,255,255,0.3);
+  transform: translateY(-1px);
+}
+
+.new-task-button:active,
+.run-button:active,
+.primary-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(47, 123, 255, 0.3);
 }
 
 .new-task-button {
   width: 100%;
   margin-top: 14px;
   text-align: left;
-  font-weight: 600;
 }
 
 .mini-icon-button {
@@ -260,18 +300,27 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  border: 1px solid transparent;
+  border: 1px solid rgba(226, 232, 243, 0.4);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.8);
   padding: 12px;
   text-align: left;
   color: #25324d;
+  transition: all 0.2s ease;
+}
+
+.session-thread:hover:not(.active) {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(47, 123, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31, 52, 94, 0.04);
 }
 
 .session-thread.active {
-  background: linear-gradient(180deg, #2f7bff 0%, #255fc7 100%);
+  background: linear-gradient(180deg, #2f7bff 0%, #1a51d1 100%);
   color: #fff;
-  box-shadow: 0 12px 24px rgba(47, 123, 255, 0.24);
+  box-shadow: 0 8px 24px rgba(47, 123, 255, 0.3);
+  border-color: transparent;
 }
 
 .session-thread-meta {
@@ -517,6 +566,36 @@ textarea {
   animation: pulse 1.4s ease-in-out infinite;
 }
 
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+.primary-button.loading,
+.run-button.loading {
+  position: relative;
+  color: transparent !important;
+}
+
+.primary-button.loading::after,
+.run-button.loading::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 9px);
+  left: calc(50% - 9px);
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 .session-header-copy h1 {
   margin: 0;
   font-size: 18px;
@@ -668,8 +747,19 @@ textarea {
   font-size: 16px;
 }
 
+.session-step-details-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-in-out;
+}
+
+.session-step-details-wrapper.expanded {
+  grid-template-rows: 1fr;
+}
+
 .session-step-details {
-  margin-top: 14px;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .detail-stack,
@@ -696,6 +786,19 @@ textarea {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.88);
   padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+.plan-step-card.active-subtask {
+  border-color: rgba(47, 123, 255, 0.6);
+  background: rgba(240, 246, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(47, 123, 255, 0.1);
+}
+
+.detail-note.success {
+  color: #206f48;
+  margin-top: 8px;
+  font-weight: 500;
 }
 
 .before-after-grid,

@@ -35,6 +35,7 @@ from models import (
     StepResult,
     StepStatus,
     StepType,
+    SubTask,
     TaskAction,
     TaskInterpretation,
     VerificationConfig,
@@ -1026,10 +1027,15 @@ class AxiomRunManager:
          # Construct a task interpretation dynamically from the subtask state
          import copy
          from models import TaskAction, TaskInterpretation
+         try:
+             action_val = TaskAction(subtask.action)
+         except ValueError:
+             action_val = TaskAction.UNKNOWN
+
          interpretation = TaskInterpretation(
              raw_task=subtask.description,
              summary=subtask.description,
-             action=TaskAction(subtask.action),
+             action=action_val,
              target_path=subtask.target_path,
              command=session.get("current_subtask_command") if subtask.action == "run_command" else None,
              content=session.get("current_subtask_content") if subtask.action in {"create_file", "modify_file"} else None,
@@ -1127,10 +1133,17 @@ class AxiomRunManager:
         from models import TaskAction, TaskInterpretation
         if interpretation.action == TaskAction.COMPLEX.value and interpretation.subtasks:
             subtask = interpretation.subtasks[session["current_subtask_index"]]
+
+            # Use TaskAction for standard actions, fallback to UNKNOWN for unsupported like 'analyze'
+            try:
+                action_val = TaskAction(subtask.action)
+            except ValueError:
+                action_val = TaskAction.UNKNOWN
+
             interpretation = TaskInterpretation(
                 raw_task=subtask.description,
                 summary=subtask.description,
-                action=TaskAction(subtask.action),
+                action=action_val,
                 target_path=subtask.target_path,
                 command=session.get("current_subtask_command") if subtask.action == "run_command" else None,
                 content=session.get("current_subtask_content") if subtask.action in {"create_file", "modify_file"} else None,
