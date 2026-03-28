@@ -907,6 +907,9 @@ class AxiomRunManager:
                              # For now, we follow the simple path of failing if a subtask fails terminally.
                              return
 
+                         # Update the main task interpretation in session to capture the subtask's result_summary
+                         session["task_interpretation"] = interpretation.to_dict()
+
                          session["current_subtask_index"] += 1
                          session["current_subtask_content"] = None
                          session["current_subtask_command"] = None
@@ -1104,9 +1107,6 @@ class AxiomRunManager:
                   subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}. Details: {last_step['details']}"
              else:
                   subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}"
-
-             # Update interpretation back to session
-             session["task_interpretation"] = interpretation.to_dict()
 
 
     def _execute_phase(self, session: dict, phase: str) -> None:

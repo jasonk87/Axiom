@@ -104,6 +104,14 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
                 session_id = parsed.path.split("/")[-2]
                 self._send_json(STATE.approve_plan(session_id))
                 return
+            if parsed.path.endswith("/approve-decomposition"):
+                session_id = parsed.path.split("/")[-2]
+                self._send_json(STATE.approve_decomposition(session_id))
+                return
+            if parsed.path.endswith("/approve-implementation"):
+                session_id = parsed.path.split("/")[-2]
+                self._send_json(STATE.approve_implementation(session_id))
+                return
             if parsed.path.endswith("/approve-phase"):
                 session_id = parsed.path.split("/")[-2]
                 self._send_json(STATE.approve_phase(session_id))
@@ -111,6 +119,14 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
             if parsed.path.endswith("/decline-plan"):
                 session_id = parsed.path.split("/")[-2]
                 self._send_json(STATE.decline_plan(session_id, payload.get("reason")))
+                return
+            if parsed.path.endswith("/decline-decomposition"):
+                session_id = parsed.path.split("/")[-2]
+                self._send_json(STATE.decline_decomposition(session_id, payload.get("reason")))
+                return
+            if parsed.path.endswith("/decline-implementation"):
+                session_id = parsed.path.split("/")[-2]
+                self._send_json(STATE.decline_implementation(session_id, payload.get("reason")))
                 return
             if parsed.path.endswith("/decline-phase"):
                 session_id = parsed.path.split("/")[-2]
