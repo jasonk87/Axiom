@@ -6,6 +6,9 @@ __pycache__/
 output/
 ui/dist/
 ui/node_modules/
+*.tsbuildinfo
+ui/vite.config.js
+ui/vite.config.d.ts
 
 phase3_smoke/
 phase4_repair/
