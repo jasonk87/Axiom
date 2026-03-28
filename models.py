@@ -548,6 +548,8 @@ class TaskInterpretation:
     command: str | None = None
     snapshot_id: str | None = None
     subtasks: list[SubTask] | None = None
+    compressed_history: str | None = None
+    compressed_subtask_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

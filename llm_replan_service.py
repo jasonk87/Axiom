@@ -56,7 +56,8 @@ class LocalLLMReplanService:
                 "summary": interpretation.summary,
                 "raw_task": interpretation.raw_task,
             },
-            "completed_subtasks": [st.to_dict() for st in completed_subtasks],
+            "compressed_history": interpretation.compressed_history,
+            "recent_completed_subtasks": [st.to_dict() for st in completed_subtasks[interpretation.compressed_subtask_count:]],
             "workspace": {
                 "scope": scope_manager.describe_effective_scope(),
                 "protected_paths": scope_manager.protected_path_labels(),

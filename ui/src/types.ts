@@ -34,6 +34,8 @@ export type LLMSettings = {
   timeout_seconds: number;
   retry_limit: number;
   temperature: number;
+  compression_enabled: boolean;
+  compression_threshold: number;
 };
 
 export type LLMStructuredSummary = {
@@ -95,6 +97,8 @@ export type AxiomSession = {
     raw_task?: string;
     action: string;
     target_path?: string | null;
+    compressed_history?: string | null;
+    compressed_subtask_count?: number;
   };
   repo_index_summary?: {
     generated?: boolean;

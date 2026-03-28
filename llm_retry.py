@@ -6,7 +6,7 @@ from typing import Callable
 from artifact_manager import ArtifactManager
 from llm_client import LLMProviderError, LLMResponse, LLMSettings, build_provider
 from models import ArtifactReference, LLMActivityEvent, LLMStructuredResult, LLMValidationIssue
-from structured_output import parse_json_object, validate_plan_payload, validate_review_payload, validate_decompose_payload, validate_replan_payload
+from structured_output import parse_json_object, validate_plan_payload, validate_review_payload, validate_decompose_payload, validate_replan_payload, validate_compress_payload
 
 
 @dataclass
@@ -97,6 +97,26 @@ class StructuredOutputRetryEngine:
             fallback_message=fallback_message,
             validator=validate_replan_payload,
             artifact_prefix="llm_replan",
+            initial_events=initial_events,
+            initial_artifacts=initial_artifacts,
+        )
+
+    def generate_compress_output(
+        self,
+        system_instruction: str,
+        user_instruction: str,
+        fallback_message: str,
+        initial_events: list[LLMActivityEvent] | None = None,
+        initial_artifacts: list[ArtifactReference] | None = None,
+    ) -> StructuredPlanOutput:
+        return self.generate_structured_output(
+            feature="context_compression",
+            output_label="context compression",
+            system_instruction=system_instruction,
+            user_instruction=user_instruction,
+            fallback_message=fallback_message,
+            validator=validate_compress_payload,
+            artifact_prefix="llm_compress",
             initial_events=initial_events,
             initial_artifacts=initial_artifacts,
         )

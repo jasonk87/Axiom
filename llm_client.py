@@ -28,6 +28,8 @@ class LLMSettings:
     timeout_seconds: int
     retry_limit: int
     temperature: float
+    compression_enabled: bool
+    compression_threshold: int
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
@@ -35,6 +37,8 @@ class LLMSettings:
         enabled = enabled_raw in {"1", "true", "yes", "on"}
         review_raw = os.getenv("AXIOM_LLM_REVIEW_ENABLED", "true").strip().lower()
         review_enabled = review_raw in {"1", "true", "yes", "on"}
+        compression_raw = os.getenv("AXIOM_LLM_COMPRESSION_ENABLED", "true").strip().lower()
+        compression_enabled = compression_raw in {"1", "true", "yes", "on"}
         return cls(
             enabled=enabled,
             review_enabled=review_enabled,
@@ -44,6 +48,8 @@ class LLMSettings:
             timeout_seconds=int(os.getenv("AXIOM_LLM_TIMEOUT_SECONDS", "20")),
             retry_limit=max(0, int(os.getenv("AXIOM_LLM_RETRY_LIMIT", "2"))),
             temperature=float(os.getenv("AXIOM_LLM_TEMPERATURE", "0.1")),
+            compression_enabled=compression_enabled,
+            compression_threshold=max(1, int(os.getenv("AXIOM_LLM_COMPRESSION_THRESHOLD", "5"))),
         )
 
     @classmethod
@@ -58,6 +64,8 @@ class LLMSettings:
             timeout_seconds=max(1, int(payload.get("timeout_seconds", defaults.timeout_seconds))),
             retry_limit=max(0, int(payload.get("retry_limit", defaults.retry_limit))),
             temperature=float(payload.get("temperature", defaults.temperature)),
+            compression_enabled=bool(payload.get("compression_enabled", defaults.compression_enabled)),
+            compression_threshold=max(1, int(payload.get("compression_threshold", defaults.compression_threshold))),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,6 +78,8 @@ class LLMSettings:
             "timeout_seconds": self.timeout_seconds,
             "retry_limit": self.retry_limit,
             "temperature": self.temperature,
+            "compression_enabled": self.compression_enabled,
+            "compression_threshold": self.compression_threshold,
         }
 
 

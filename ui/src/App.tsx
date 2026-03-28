@@ -64,6 +64,8 @@ const DEFAULT_LLM_SETTINGS: LLMSettings = {
   timeout_seconds: 20,
   retry_limit: 2,
   temperature: 0.1,
+  compression_enabled: true,
+  compression_threshold: 5,
 };
 
 function splitList(raw: string): string[] {
@@ -1444,6 +1446,22 @@ export default function App() {
             <label className="toggle">
               <input type="checkbox" checked={llmSettings.review_enabled} onChange={(event) => setLlmSettings((current) => ({ ...current, review_enabled: event.target.checked }))} />
               Enable plan review
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={llmSettings.compression_enabled} onChange={(event) => setLlmSettings((current) => ({ ...current, compression_enabled: event.target.checked }))} />
+              Enable context compression
+            </label>
+          </div>
+          <div className="advanced-grid">
+            <label>
+              Subtasks before compression
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={llmSettings.compression_threshold}
+                onChange={(event) => setLlmSettings((current) => ({ ...current, compression_threshold: Number(event.target.value) || 5 }))}
+              />
             </label>
           </div>
           <div className="ai-settings-footer">

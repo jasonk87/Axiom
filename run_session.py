@@ -41,6 +41,7 @@ from models import (
     VerificationConfig,
     VerificationProfile,
 )
+from llm_compress_service import LocalLLMCompressService
 from llm_decompose_service import LocalLLMDecomposeService
 from llm_implement_service import LocalLLMImplementService
 from llm_replan_service import LocalLLMReplanService
@@ -121,6 +122,8 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
             )
             for st in payload.get("subtasks")
         ] if payload.get("subtasks") is not None else None,
+        compressed_history=payload.get("compressed_history"),
+        compressed_subtask_count=payload.get("compressed_subtask_count", 0),
     )
 
 
@@ -835,10 +838,33 @@ class AxiomRunManager:
                 interpretation = interpretation_from_dict(session["task_interpretation"])
                 if interpretation.action == TaskAction.COMPLEX.value:
                     if session["current_subtask_index"] >= len(interpretation.subtasks or []):
-                        # Try to replan
-                        replan_service = LocalLLMReplanService(settings=LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict()))
+                        llm_settings = LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict())
                         project_root = session["project_root"]
                         artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+
+                        # Compress history if enabled and threshold exceeded
+                        if llm_settings.compression_enabled:
+                             uncompressed_count = session["current_subtask_index"] - interpretation.compressed_subtask_count
+                             if uncompressed_count >= llm_settings.compression_threshold:
+                                 compress_service = LocalLLMCompressService(settings=llm_settings)
+                                 subtasks_to_compress = interpretation.subtasks[interpretation.compressed_subtask_count:session["current_subtask_index"]]
+
+                                 compressed_text, compress_summary = compress_service.generate_compression(
+                                     artifact_manager=artifact_manager,
+                                     interpretation=interpretation,
+                                     subtasks_to_compress=subtasks_to_compress,
+                                     existing_compressed_history=interpretation.compressed_history,
+                                 )
+
+                                 if compressed_text:
+                                     interpretation.compressed_history = compressed_text
+                                     interpretation.compressed_subtask_count = session["current_subtask_index"]
+                                     session["task_interpretation"] = interpretation.to_dict()
+                                     session["activity"].append(f"Compressed {len(subtasks_to_compress)} subtasks into history.")
+                                     self._persist_session(session)
+
+                        # Try to replan
+                        replan_service = LocalLLMReplanService(settings=llm_settings)
                         scope_manager = ScopeManager(
                             project_root,
                             session["request"].get("scopePaths", []),

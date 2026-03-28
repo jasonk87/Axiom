@@ -37,6 +37,7 @@ DECOMPOSE_SUBTASK_KEYS = {"action", "description", "target_path", "command"}
 VALID_DECOMPOSE_ACTIONS = {"create_file", "modify_file", "run_command", "analyze", "restore_snapshot", "unknown"}
 
 REPLAN_TOP_LEVEL_KEYS = {"is_complete", "reasoning", "new_subtasks"}
+COMPRESS_TOP_LEVEL_KEYS = {"summary"}
 
 def parse_json_object(raw_text: str) -> tuple[dict[str, Any] | None, list[LLMValidationIssue]]:
     stripped = raw_text.strip()
@@ -92,6 +93,19 @@ def validate_plan_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
         if dependencies is not None:
             if not isinstance(dependencies, list) or not all(isinstance(item, str) for item in dependencies):
                 issues.append(LLMValidationIssue(code="wrong_type", message="Field 'dependencies' must be a list of strings.", path=f"{path}.dependencies"))
+    return issues
+
+def validate_compress_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
+    issues: list[LLMValidationIssue] = []
+    extra_top_level = set(payload.keys()) - COMPRESS_TOP_LEVEL_KEYS
+    if extra_top_level:
+        issues.append(LLMValidationIssue(code="extra_keys", message=f"Unexpected top-level keys: {sorted(extra_top_level)}.", path="$"))
+
+    if "summary" not in payload:
+         issues.append(LLMValidationIssue(code="missing_required_field", message="Missing required field 'summary'.", path="summary"))
+    elif not isinstance(payload["summary"], str):
+         issues.append(LLMValidationIssue(code="wrong_type", message="Field 'summary' must be a string.", path="summary"))
+
     return issues
 
 def validate_replan_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:

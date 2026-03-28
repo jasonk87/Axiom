@@ -84,6 +84,8 @@ class LLMReviewTests(unittest.TestCase):
             timeout_seconds=5,
             retry_limit=2,
             temperature=0.1,
+            compression_enabled=True,
+            compression_threshold=5,
         )
 
     def tearDown(self) -> None:
