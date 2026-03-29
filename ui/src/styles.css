@@ -33,6 +33,9 @@ textarea {
 
 button {
   cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
 }
 
 input,
@@ -114,19 +117,22 @@ textarea {
 .mini-icon-button,
 .advanced-toggle-button {
   border: 1px solid rgba(190, 201, 222, 0.6);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
   color: #33415d;
-  padding: 10px 14px;
+  padding: 8px 12px;
+  font-size: 13px;
   font-weight: 500;
   box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
 .ghost-button:hover,
+.inline-action-button:hover,
+.inline-toggle-button:hover,
 .artifact-pill:hover,
 .advanced-toggle-button:hover {
   background: #fff;
-  border-color: #2f7bff;
+  border-color: rgba(47, 123, 255, 0.4);
   color: #2f7bff;
   box-shadow: 0 4px 8px rgba(47, 123, 255, 0.1);
   transform: translateY(-1px);
@@ -303,7 +309,7 @@ textarea {
   border: 1px solid rgba(226, 232, 243, 0.4);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.8);
-  padding: 12px;
+  padding: 10px 12px;
   text-align: left;
   color: #25324d;
   transition: all 0.2s ease;
@@ -311,7 +317,7 @@ textarea {
 
 .session-thread:hover:not(.active) {
   background: rgba(255, 255, 255, 1);
-  border-color: rgba(47, 123, 255, 0.2);
+  border-color: rgba(47, 123, 255, 0.3);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(31, 52, 94, 0.04);
 }
@@ -323,11 +329,18 @@ textarea {
   border-color: transparent;
 }
 
+.session-thread-title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
 .session-thread-meta {
   display: flex;
   gap: 10px;
-  margin-top: 4px;
-  font-size: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.8;
 }
 
 .thread-diff-pill,
@@ -337,38 +350,52 @@ textarea {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
 .mini-pill,
 .status-chip {
-  background: rgba(240, 243, 249, 0.95);
-  color: #526179;
+  background: rgba(240, 243, 249, 0.8);
+  border: 1px solid rgba(210, 219, 236, 0.9);
+  color: #4a5568;
 }
 
 .status-chip-button {
-  border: 1px solid rgba(190, 201, 222, 0.88);
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.status-chip-button:hover {
+  background: #fff;
+  border-color: #2f7bff;
+  color: #2f7bff;
+  box-shadow: 0 2px 4px rgba(47, 123, 255, 0.1);
 }
 
 .mini-pill.success,
 .status-chip.complete {
-  background: #d7f0e1;
-  color: #206f48;
+  background: rgba(215, 240, 225, 0.6);
+  border-color: rgba(143, 208, 170, 0.5);
+  color: #1e6b45;
 }
 
 .mini-pill.warning,
 .status-chip.warning,
 .status-chip.pending {
-  background: #ffeccc;
-  color: #875400;
+  background: rgba(255, 236, 204, 0.6);
+  border-color: rgba(242, 196, 111, 0.5);
+  color: #805000;
 }
 
 .status-chip.running {
-  background: #dce7ff;
-  color: #2a5ec7;
+  background: rgba(220, 231, 255, 0.6);
+  border-color: rgba(143, 174, 245, 0.5);
+  color: #2553b6;
 }
 
 .thread-diff-pill {
@@ -618,8 +645,10 @@ textarea {
 
 .approval-inline-bar {
   align-items: center;
-  border-bottom: 1px solid rgba(228, 234, 244, 0.9);
-  background: rgba(248, 250, 255, 0.95);
+  border-bottom: 1px solid rgba(226, 232, 243, 0.8);
+  background: rgba(244, 247, 255, 0.8);
+  padding: 12px 24px;
+  justify-content: space-between;
 }
 
 .approval-copy {
@@ -627,6 +656,12 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  color: #1f345e;
+}
+
+.approval-copy strong {
+  font-weight: 600;
+  color: #0b1a3b;
 }
 
 .interactive-stream-scroll {
@@ -642,9 +677,9 @@ textarea {
 
 .session-step-card {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 14px;
-  padding: 18px 0;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  padding: 20px 0;
   border-bottom: 1px solid rgba(227, 233, 243, 0.9);
   animation: streamReveal 180ms ease-out;
 }
@@ -657,6 +692,7 @@ textarea {
   position: relative;
   display: flex;
   justify-content: center;
+  padding-top: 2px; /* vertically align with h3 */
 }
 
 .session-step-rail::after {
@@ -665,7 +701,7 @@ textarea {
   top: 36px;
   bottom: -20px;
   width: 2px;
-  background: rgba(212, 219, 232, 0.95);
+  background: rgba(226, 232, 242, 0.6);
 }
 
 .session-step-card:last-child .session-step-rail::after {
@@ -673,40 +709,40 @@ textarea {
 }
 
 .session-step-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  border: 2px solid #d8e1f0;
-  background: #eef2fa;
+  border: 2px solid #e1e6f0;
+  background: #f7f9fc;
 }
 
 .session-step-icon-inner {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
-  background: #7f90ad;
+  background: #8b99b3;
 }
 
 .session-step-icon.status-pending .session-step-icon-inner {
   background: transparent;
-  border: 2px solid #7f90ad;
+  border: 2px solid #94a3bc;
 }
 
 .session-step-icon.status-complete {
-  background: #d7f0e1;
-  border-color: #8fd0aa;
+  background: #e8f5ed;
+  border-color: #a4d8b9;
 }
 
 .session-step-icon.status-complete .session-step-icon-inner {
-  width: 12px;
+  width: 11px;
   height: 6px;
   background: transparent;
-  border-left: 2px solid #206f48;
-  border-bottom: 2px solid #206f48;
+  border-left: 2px solid #1a7c49;
+  border-bottom: 2px solid #1a7c49;
   border-radius: 0;
-  transform: rotate(-45deg) translateY(-1px);
+  transform: rotate(-45deg) translateY(-2px) translateX(1px);
 }
 
 .session-step-icon.status-running {
