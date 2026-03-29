@@ -1110,7 +1110,6 @@ class AxiomRunManager:
 
     def _execute_subtask(self, session: dict, subtask) -> None:
          # Construct a task interpretation dynamically from the subtask state
-         import copy
          from models import TaskAction, TaskInterpretation
          try:
              action_val = TaskAction(subtask.action)

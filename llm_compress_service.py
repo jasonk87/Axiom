@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+
 
 from artifact_manager import ArtifactManager
 from llm_client import LLMSettings

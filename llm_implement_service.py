@@ -12,7 +12,6 @@ from models import (
     ProjectMemoryContext,
     RepoIndexSummary,
     SubTask,
-    VerificationConfig,
 )
 from scope_manager import ScopeManager
 

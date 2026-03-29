@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 
-from models import CommandResult, VerificationConfig, VerificationProfile
+
+from models import CommandResult, VerificationConfig
 from terminal_runner import TerminalRunner
 from workspace_manager import WorkspaceManager
 
