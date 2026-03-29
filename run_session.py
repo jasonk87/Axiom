@@ -55,6 +55,7 @@ from snapshot_manager import SnapshotManager
 from terminal_runner import TerminalRunner
 from verification_manager import VerificationManager
 from workspace_manager import WorkspaceManager
+from vector_store import LocalVectorStore
 
 
 ACTIVE_RUN_STATUSES = {
@@ -182,6 +183,7 @@ def repo_index_summary_from_dict(payload: dict | None) -> RepoIndexSummary | Non
         python_symbols=dict(payload.get("python_symbols", {})),
         protected_files_indexed=list(payload.get("protected_files_indexed", [])),
         notes=list(payload.get("notes", [])),
+        semantic_search_results=list(payload.get("semantic_search_results", [])),
         artifact_reference=ArtifactReference(**artifact) if artifact else None,
     )
 
@@ -567,6 +569,24 @@ class AxiomRunManager:
         snapshots = SnapshotManager(project_root)
         interpretation = orchestrator._interpret_task(task)
 
+        repo_index_summary = orchestrator._build_repo_index(
+            build_repo_index,
+            artifact_manager,
+            artifact_references,
+            workspace,
+            scope_manager,
+        )
+
+        # Perform Local RAG BEFORE decomposition
+        if repo_index_summary and llm_settings.enabled and getattr(llm_settings, "embedding_model", None):
+             try:
+                 vector_store = LocalVectorStore(project_root, llm_settings)
+                 semantic_results = vector_store.search(task, top_k=3)
+                 if semantic_results:
+                      repo_index_summary.semantic_search_results = semantic_results
+             except Exception as e:
+                 print(f"[Axiom] Semantic search failed: {e}")
+
         if interpretation.action == TaskAction.COMPLEX:
             if not llm_settings.enabled:
                 interpretation.action = TaskAction.UNKNOWN
@@ -577,7 +597,7 @@ class AxiomRunManager:
                     interpretation=interpretation,
                     scope_manager=scope_manager,
                     verification=verification,
-                    repo_index_summary=None,
+                    repo_index_summary=repo_index_summary,
                     project_memory=project_memory,
                 )
                 if subtasks is not None:
@@ -599,13 +619,6 @@ class AxiomRunManager:
                 plan_steps=[],
                 persist=False,
             )
-        repo_index_summary = orchestrator._build_repo_index(
-            build_repo_index,
-            artifact_manager,
-            artifact_references,
-            workspace,
-            scope_manager,
-        )
         plan, llm_summary, llm_review_summary = None, None, None
         if interpretation.action != TaskAction.COMPLEX:
             plan, llm_summary, llm_review_summary = orchestrator.build_plan_with_local_llm(

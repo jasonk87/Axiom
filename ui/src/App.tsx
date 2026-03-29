@@ -66,6 +66,7 @@ const DEFAULT_LLM_SETTINGS: LLMSettings = {
   temperature: 0.1,
   compression_enabled: true,
   compression_threshold: 5,
+  embedding_model: "nomic-embed-text",
 };
 
 function splitList(raw: string): string[] {
@@ -1461,6 +1462,15 @@ export default function App() {
                 max={20}
                 value={llmSettings.compression_threshold}
                 onChange={(event) => setLlmSettings((current) => ({ ...current, compression_threshold: Number(event.target.value) || 5 }))}
+              />
+            </label>
+            <label>
+              Embedding Model (Local RAG)
+              <input
+                type="text"
+                value={llmSettings.embedding_model}
+                onChange={(event) => setLlmSettings((current) => ({ ...current, embedding_model: event.target.value }))}
+                placeholder="nomic-embed-text"
               />
             </label>
           </div>

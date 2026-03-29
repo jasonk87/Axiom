@@ -30,6 +30,7 @@ class LLMSettings:
     temperature: float
     compression_enabled: bool
     compression_threshold: int
+    embedding_model: str
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
@@ -50,6 +51,7 @@ class LLMSettings:
             temperature=float(os.getenv("AXIOM_LLM_TEMPERATURE", "0.1")),
             compression_enabled=compression_enabled,
             compression_threshold=max(1, int(os.getenv("AXIOM_LLM_COMPRESSION_THRESHOLD", "5"))),
+            embedding_model=os.getenv("AXIOM_LLM_EMBEDDING_MODEL", "nomic-embed-text").strip(),
         )
 
     @classmethod
@@ -66,6 +68,7 @@ class LLMSettings:
             temperature=float(payload.get("temperature", defaults.temperature)),
             compression_enabled=bool(payload.get("compression_enabled", defaults.compression_enabled)),
             compression_threshold=max(1, int(payload.get("compression_threshold", defaults.compression_threshold))),
+            embedding_model=str(payload.get("embedding_model", defaults.embedding_model)).strip(),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -80,6 +83,7 @@ class LLMSettings:
             "temperature": self.temperature,
             "compression_enabled": self.compression_enabled,
             "compression_threshold": self.compression_threshold,
+            "embedding_model": self.embedding_model,
         }
 
 
@@ -143,6 +147,36 @@ class OllamaProvider:
                 "eval_count": data.get("eval_count"),
             },
         )
+
+    def embed(self, text: str) -> list[float]:
+        payload = {
+            "model": self.settings.embedding_model,
+            "prompt": text,
+        }
+        body = json.dumps(payload).encode("utf-8")
+        url = f"{self.settings.base_url.rstrip('/')}/api/embeddings"
+        http_request = request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with request.urlopen(http_request, timeout=self.settings.timeout_seconds) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except error.HTTPError as caught:
+            raise LLMProviderError("ollama_http_error", f"Ollama returned HTTP {caught.code} during embedding.") from caught
+        except error.URLError as caught:
+            raise LLMProviderError("provider_unavailable", f"Ollama is unavailable at {self.settings.base_url}.") from caught
+        except TimeoutError as caught:
+            raise LLMProviderError("timeout", "Timed out waiting for the local model embedding response.") from caught
+
+        embedding = data.get("embedding")
+        if not isinstance(embedding, list) or not embedding:
+            raise LLMProviderError("invalid_embedding", "The local model returned an invalid embedding response.")
+
+        return embedding
 
 
 def build_provider(settings: LLMSettings):

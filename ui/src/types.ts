@@ -36,6 +36,7 @@ export type LLMSettings = {
   temperature: number;
   compression_enabled: boolean;
   compression_threshold: number;
+  embedding_model: string;
 };
 
 export type LLMStructuredSummary = {

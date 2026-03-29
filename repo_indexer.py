@@ -6,6 +6,7 @@ from pathlib import Path
 from models import RepoIndexSummary
 from scope_manager import ScopeManager, ScopeViolationError
 from workspace_manager import WorkspaceManager
+from vector_store import LocalVectorStore
 
 
 class RepoIndexer:
@@ -32,6 +33,15 @@ class RepoIndexer:
         python_symbols: dict[str, dict[str, list[str]]] = {}
         protected_files_indexed: list[str] = []
         notes: list[str] = []
+
+        from llm_client import LLMSettings
+        settings = LLMSettings.from_env()
+        vector_store = None
+        if settings.enabled and getattr(settings, "embedding_model", None):
+             try:
+                 vector_store = LocalVectorStore(self.project_root, settings)
+             except Exception as e:
+                 print(f"[RepoIndexer] Failed to initialize vector store: {e}")
 
         for path in self.project_root.rglob("*"):
             if not path.is_file():
@@ -66,6 +76,13 @@ class RepoIndexer:
                 if symbols["functions"] or symbols["classes"]:
                     python_symbols[relative] = symbols
 
+            if vector_store is not None and suffix in {".py", ".md", ".txt", ".ts", ".tsx", ".js", ".jsx", ".json", ".yaml", ".yml", ".css", ".html"}:
+                try:
+                    content = path.read_text(encoding="utf-8")
+                    vector_store.add_document(relative, content)
+                except Exception:
+                    pass
+
             files.append(
                 {
                     "path": relative,
@@ -78,6 +95,13 @@ class RepoIndexer:
             notes.append("No readable files were indexed under the current scope.")
         if self.scope_manager.describe_effective_scope()["mode"] == "selected_paths":
             notes.append("Repo index is scope-limited and may omit files outside the active scope.")
+
+        # If the local LLM is enabled and configured for embeddings, sync the vector store
+        if vector_store is not None:
+             try:
+                 vector_store.sync_index()
+             except Exception as e:
+                 print(f"[RepoIndexer] Background vector store sync failed: {e}")
 
         summary = RepoIndexSummary(
             generated=True,

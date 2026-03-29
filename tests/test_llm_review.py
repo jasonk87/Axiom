@@ -86,6 +86,7 @@ class LLMReviewTests(unittest.TestCase):
             temperature=0.1,
             compression_enabled=True,
             compression_threshold=5,
+            embedding_model="nomic-embed-text",
         )
 
     def tearDown(self) -> None:
