@@ -57,7 +57,6 @@ from verification_manager import VerificationManager
 from workspace_manager import WorkspaceManager
 from vector_store import LocalVectorStore
 
-
 ACTIVE_RUN_STATUSES = {
     RunStatus.RUNNING.value,
     RunStatus.AUTO_RUNNING_READ_ONLY_PHASE.value,
@@ -113,17 +112,21 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
         content=payload.get("content"),
         command=payload.get("command"),
         snapshot_id=payload.get("snapshot_id"),
-        subtasks=[
-            SubTask(
-                action=st["action"],
-                description=st["description"],
-                target_path=st.get("target_path"),
-                command=st.get("command"),
-                result_summary=st.get("result_summary"),
-                dependencies=st.get("dependencies", []),
-            )
-            for st in payload["subtasks"]
-        ] if payload.get("subtasks") is not None else None,
+        subtasks=(
+            [
+                SubTask(
+                    action=st["action"],
+                    description=st["description"],
+                    target_path=st.get("target_path"),
+                    command=st.get("command"),
+                    result_summary=st.get("result_summary"),
+                    dependencies=st.get("dependencies", []),
+                )
+                for st in payload["subtasks"]
+            ]
+            if payload.get("subtasks") is not None
+            else None
+        ),
         compressed_history=payload.get("compressed_history"),
         compressed_subtask_count=payload.get("compressed_subtask_count", 0),
     )
@@ -250,11 +253,18 @@ def llm_summary_from_dict(payload: dict | None) -> LLMStructuredResult | None:
                 summary=event["summary"],
                 attempt=event.get("attempt", 0),
                 details=event.get("details", {}),
-                artifact_reference=ArtifactReference(**event["artifact_reference"]) if event.get("artifact_reference") else None,
+                artifact_reference=(
+                    ArtifactReference(**event["artifact_reference"])
+                    if event.get("artifact_reference")
+                    else None
+                ),
             )
             for event in payload.get("events", [])
         ],
-        artifact_references=[ArtifactReference(**artifact) for artifact in payload.get("artifact_references", [])],
+        artifact_references=[
+            ArtifactReference(**artifact)
+            for artifact in payload.get("artifact_references", [])
+        ],
     )
 
 
@@ -272,7 +282,9 @@ class AxiomRunManager:
     def __init__(self, state_root: Path | None = None) -> None:
         self.sessions: dict[str, dict] = {}
         self.lock = Lock()
-        self.registry_root = state_root or (Path(__file__).resolve().parent / ".axiom" / "state")
+        self.registry_root = state_root or (
+            Path(__file__).resolve().parent / ".axiom" / "state"
+        )
         self.registry_root.mkdir(parents=True, exist_ok=True)
         self.registry_path = self.registry_root / "session_registry.json"
         self.llm_settings_manager = LLMSettingsManager(self.registry_root)
@@ -403,7 +415,10 @@ class AxiomRunManager:
         with PERSISTENCE_LOCK:
             self._touch(session)
             public = self._public_session(session)
-            session_file = Path(session.get("_session_file") or self._session_file_path(session["project_root"], session["id"]))
+            session_file = Path(
+                session.get("_session_file")
+                or self._session_file_path(session["project_root"], session["id"])
+            )
             session["_session_file"] = str(session_file)
             self._atomic_write_json(session_file, public)
             self._update_registry(session, session_file)
@@ -419,13 +434,19 @@ class AxiomRunManager:
 
     def get_run_state(self, session_id: str) -> dict:
         session = self._session(session_id)
-        self.project_manager.set_active(session.get("project_id"), session.get("session_id", session["id"]))
+        self.project_manager.set_active(
+            session.get("project_id"), session.get("session_id", session["id"])
+        )
         return self._public_session(session)
 
     def list_runs(self) -> list[dict]:
         with self.lock:
-            sessions = [self._public_session(session) for session in self.sessions.values()]
-        return sorted(sessions, key=lambda item: item.get("updated_at", ""), reverse=True)
+            sessions = [
+                self._public_session(session) for session in self.sessions.values()
+            ]
+        return sorted(
+            sessions, key=lambda item: item.get("updated_at", ""), reverse=True
+        )
 
     def _load_persisted_sessions(self) -> None:
         registry = self._load_registry()
@@ -439,20 +460,27 @@ class AxiomRunManager:
             payload = json.loads(path.read_text(encoding="utf-8"))
             session = dict(payload)
             session.setdefault("session_id", session.get("id", session_id))
-            session.setdefault("run_id", session.get("session_id", session.get("id", session_id)))
+            session.setdefault(
+                "run_id", session.get("session_id", session.get("id", session_id))
+            )
             session["_cancellation_event"] = Event()
             session["_thread"] = None
             session["_session_file"] = str(path)
             self._reconcile_loaded_session(session)
             loaded[session_id] = session
-        project_changed = self.project_manager.migrate_session_roots(list(loaded.values()))
+        project_changed = self.project_manager.migrate_session_roots(
+            list(loaded.values())
+        )
         with self.lock:
             self.sessions = loaded
         if project_changed:
             for session in loaded.values():
                 self._persist_session(session)
         elif registry_changed:
-            cleaned = {session_id: self._registry_entry_for(session) for session_id, session in loaded.items()}
+            cleaned = {
+                session_id: self._registry_entry_for(session)
+                for session_id, session in loaded.items()
+            }
             with PERSISTENCE_LOCK:
                 self._atomic_write_json(self.registry_path, cleaned)
 
@@ -487,7 +515,9 @@ class AxiomRunManager:
         if project_id:
             project = self.project_manager.get_project_detail(project_id)
         elif payload.get("projectPath"):
-            ensured_project = self.project_manager.ensure_project_for_root(payload["projectPath"])
+            ensured_project = self.project_manager.ensure_project_for_root(
+                payload["projectPath"]
+            )
             project_id = ensured_project["id"]
             project = self.project_manager.get_project_detail(project_id)
         else:
@@ -511,7 +541,9 @@ class AxiomRunManager:
             {
                 "summary": project.get("memory", {}).get("project_summary", ""),
                 "known_commands": project.get("memory", {}).get("known_commands", []),
-                "recent_context": project.get("memory", {}).get("recent_context_summary", ""),
+                "recent_context": project.get("memory", {}).get(
+                    "recent_context_summary", ""
+                ),
             }
         )
         orchestrator = Orchestrator(project_root, llm_settings=llm_settings)
@@ -547,7 +579,11 @@ class AxiomRunManager:
                 "result": result.to_dict(),
                 "pending_phase": None,
                 "activity": [f"{mode.value.title()} run completed."],
-                "artifact_run_id": result.artifact_references[0].label if result.artifact_references else None,
+                "artifact_run_id": (
+                    result.artifact_references[0].label
+                    if result.artifact_references
+                    else None
+                ),
                 "created_at": now,
                 "updated_at": now,
                 "llm_settings": llm_settings.to_dict(),
@@ -563,7 +599,9 @@ class AxiomRunManager:
 
         permissions = PermissionManager.for_mode(mode)
         artifact_manager = ArtifactManager(project_root)
-        artifact_references: list[ArtifactReference] = [artifact_manager.run_reference()]
+        artifact_references: list[ArtifactReference] = [
+            artifact_manager.run_reference()
+        ]
         scope_manager = ScopeManager(project_root, scope_paths, protected_paths)
         workspace = WorkspaceManager(project_root, permissions, scope_manager)
         preview_manager = PreviewManager(workspace, scope_manager, artifact_manager)
@@ -579,14 +617,18 @@ class AxiomRunManager:
         )
 
         # Perform Local RAG BEFORE decomposition
-        if repo_index_summary and llm_settings.enabled and getattr(llm_settings, "embedding_model", None):
-             try:
-                 vector_store = LocalVectorStore(project_root, llm_settings)
-                 semantic_results = vector_store.search(task, top_k=3)
-                 if semantic_results:
-                      repo_index_summary.semantic_search_results = semantic_results
-             except Exception as e:
-                 print(f"[Axiom] Semantic search failed: {e}")
+        if (
+            repo_index_summary
+            and llm_settings.enabled
+            and getattr(llm_settings, "embedding_model", None)
+        ):
+            try:
+                vector_store = LocalVectorStore(project_root, llm_settings)
+                semantic_results = vector_store.search(task, top_k=3)
+                if semantic_results:
+                    repo_index_summary.semantic_search_results = semantic_results
+            except Exception as e:
+                print(f"[Axiom] Semantic search failed: {e}")
 
         if interpretation.action == TaskAction.COMPLEX:
             if not llm_settings.enabled:
@@ -607,7 +649,10 @@ class AxiomRunManager:
                     interpretation.action = TaskAction.UNKNOWN
                 if llm_summary is not None:
                     for artifact in llm_summary.artifact_references:
-                        if not any(existing.path == artifact.path for existing in artifact_references):
+                        if not any(
+                            existing.path == artifact.path
+                            for existing in artifact_references
+                        ):
                             artifact_references.append(artifact)
 
         change_preview = None
@@ -622,15 +667,17 @@ class AxiomRunManager:
             )
         plan, llm_summary, llm_review_summary = None, None, None
         if interpretation.action != TaskAction.COMPLEX:
-            plan, llm_summary, llm_review_summary = orchestrator.build_plan_with_local_llm(
-                mode=mode,
-                interpretation=interpretation,
-                scope_manager=scope_manager,
-                verification=verification,
-                repo_index_summary=repo_index_summary,
-                project_memory=project_memory,
-                artifact_manager=artifact_manager,
-                artifact_references=artifact_references,
+            plan, llm_summary, llm_review_summary = (
+                orchestrator.build_plan_with_local_llm(
+                    mode=mode,
+                    interpretation=interpretation,
+                    scope_manager=scope_manager,
+                    verification=verification,
+                    repo_index_summary=repo_index_summary,
+                    project_memory=project_memory,
+                    artifact_manager=artifact_manager,
+                    artifact_references=artifact_references,
+                )
             )
         if plan is not None:
             artifact_references.append(
@@ -679,7 +726,11 @@ class AxiomRunManager:
             "project_id": project_id,
             "project_root": project_root,
             "project_name": project["name"],
-            "status": RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value if interpretation.action == TaskAction.COMPLEX else RunStatus.AWAITING_PLAN_APPROVAL.value,
+            "status": (
+                RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value
+                if interpretation.action == TaskAction.COMPLEX
+                else RunStatus.AWAITING_PLAN_APPROVAL.value
+            ),
             "mode": mode.value,
             "request": payload,
             "approval_mode": approval_mode.value,
@@ -689,22 +740,36 @@ class AxiomRunManager:
             "effective_scope": scope_manager.describe_effective_scope(),
             "protected_paths": scope_manager.protected_path_labels(),
             "task_interpretation": interpretation.to_dict(),
-            "repo_index_summary": repo_index_summary.to_dict() if repo_index_summary else None,
+            "repo_index_summary": (
+                repo_index_summary.to_dict() if repo_index_summary else None
+            ),
             "project_memory": project_memory.to_dict() if project_memory else None,
             "change_preview": change_preview.to_dict() if change_preview else None,
             "llm_summary": llm_summary.to_dict() if llm_summary else None,
-            "llm_review_summary": llm_review_summary.to_dict() if llm_review_summary else None,
+            "llm_review_summary": (
+                llm_review_summary.to_dict() if llm_review_summary else None
+            ),
             "plan": plan.to_dict() if plan else None,
             "phase_policies": [policy.to_dict() for policy in phase_policies],
             "context_package": context_package.to_dict(),
-            "artifact_references": [artifact.to_dict() for artifact in artifact_references],
+            "artifact_references": [
+                artifact.to_dict() for artifact in artifact_references
+            ],
             "phase_order": phase_order,
             "next_phase_index": 0,
             "pending_phase": None,
             "snapshot_reference": None,
-            "preview_snapshot_reference": preview_snapshot_reference.to_dict() if preview_snapshot_reference else None,
+            "preview_snapshot_reference": (
+                preview_snapshot_reference.to_dict()
+                if preview_snapshot_reference
+                else None
+            ),
             "step_results": [],
-            "subtasks": [st.to_dict() for st in interpretation.subtasks] if interpretation.subtasks else [],
+            "subtasks": (
+                [st.to_dict() for st in interpretation.subtasks]
+                if interpretation.subtasks
+                else []
+            ),
             "current_subtask_index": 0,
             "phase_results": [],
             "files_read": [],
@@ -725,7 +790,6 @@ class AxiomRunManager:
             "created_at": now,
             "updated_at": now,
             "llm_settings": llm_settings.to_dict(),
-            "project_memory": project_memory.to_dict() if project_memory else None,
             "session_version": 2,
             "_cancellation_event": Event(),
             "_thread": None,
@@ -749,7 +813,9 @@ class AxiomRunManager:
     def approve_decomposition(self, session_id: str) -> dict:
         session = self._session(session_id)
         if session["status"] != RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value:
-            raise RuntimeError("Decomposition approval is not pending for this session.")
+            raise RuntimeError(
+                "Decomposition approval is not pending for this session."
+            )
         session["status"] = RunStatus.RUNNING.value
         session["activity"].append("Decomposition approved.")
         snapshot_reference = SnapshotManager(session["project_root"]).create_snapshot()
@@ -762,16 +828,23 @@ class AxiomRunManager:
     def approve_implementation(self, session_id: str) -> dict:
         session = self._session(session_id)
         if session["status"] != RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value:
-            raise RuntimeError("Implementation approval is not pending for this session.")
+            raise RuntimeError(
+                "Implementation approval is not pending for this session."
+            )
         session["status"] = RunStatus.RUNNING.value
-        session["activity"].append(f"Implementation for subtask {session['current_subtask_index']} approved.")
+        session["activity"].append(
+            f"Implementation for subtask {session['current_subtask_index']} approved."
+        )
         self._persist_session(session)
         self._start_worker(session_id)
         return self.get_run_state(session_id)
 
     def approve_phase(self, session_id: str) -> dict:
         session = self._session(session_id)
-        if session["status"] != RunStatus.AWAITING_PHASE_APPROVAL.value or session["pending_phase"] is None:
+        if (
+            session["status"] != RunStatus.AWAITING_PHASE_APPROVAL.value
+            or session["pending_phase"] is None
+        ):
             raise RuntimeError("No phase approval is pending for this session.")
         session["approved_phase"] = session["pending_phase"]
         session["activity"].append(f"Approved phase '{session['pending_phase']}'.")
@@ -783,28 +856,52 @@ class AxiomRunManager:
         session = self._session(session_id)
         if session["status"] != RunStatus.AWAITING_PLAN_APPROVAL.value:
             raise RuntimeError("Plan decline is not pending for this session.")
-        self._apply_terminal_status(session, RunStatus.DECLINED_PLAN, "Plan was declined. No execution was performed.", reason)
+        self._apply_terminal_status(
+            session,
+            RunStatus.DECLINED_PLAN,
+            "Plan was declined. No execution was performed.",
+            reason,
+        )
         return self.get_run_state(session_id)
 
     def decline_decomposition(self, session_id: str, reason: str | None = None) -> dict:
         session = self._session(session_id)
         if session["status"] != RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value:
             raise RuntimeError("Decomposition decline is not pending for this session.")
-        self._apply_terminal_status(session, RunStatus.DECLINED_DECOMPOSITION, "Decomposition was declined. No execution was performed.", reason)
+        self._apply_terminal_status(
+            session,
+            RunStatus.DECLINED_DECOMPOSITION,
+            "Decomposition was declined. No execution was performed.",
+            reason,
+        )
         return self.get_run_state(session_id)
 
-    def decline_implementation(self, session_id: str, reason: str | None = None) -> dict:
+    def decline_implementation(
+        self, session_id: str, reason: str | None = None
+    ) -> dict:
         session = self._session(session_id)
         if session["status"] != RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value:
-            raise RuntimeError("Implementation decline is not pending for this session.")
-        self._apply_terminal_status(session, RunStatus.DECLINED_IMPLEMENTATION, f"Implementation for subtask {session['current_subtask_index']} was declined.", reason)
+            raise RuntimeError(
+                "Implementation decline is not pending for this session."
+            )
+        self._apply_terminal_status(
+            session,
+            RunStatus.DECLINED_IMPLEMENTATION,
+            f"Implementation for subtask {session['current_subtask_index']} was declined.",
+            reason,
+        )
         return self.get_run_state(session_id)
 
     def decline_phase(self, session_id: str, reason: str | None = None) -> dict:
         session = self._session(session_id)
-        if session["status"] != RunStatus.AWAITING_PHASE_APPROVAL.value or session["pending_phase"] is None:
+        if (
+            session["status"] != RunStatus.AWAITING_PHASE_APPROVAL.value
+            or session["pending_phase"] is None
+        ):
             raise RuntimeError("No phase approval is pending for this session.")
-        self._mark_remaining_steps_skipped(session, f"Skipped because phase '{session['pending_phase']}' was declined.")
+        self._mark_remaining_steps_skipped(
+            session, f"Skipped because phase '{session['pending_phase']}' was declined."
+        )
         self._apply_terminal_status(
             session,
             RunStatus.DECLINED_PHASE,
@@ -820,16 +917,28 @@ class AxiomRunManager:
         session["cancellation_requested"] = True
         session["cancel_reason"] = reason
         session["_cancellation_event"].set()
-        if session["status"] in {RunStatus.AWAITING_PLAN_APPROVAL.value, RunStatus.AWAITING_PHASE_APPROVAL.value, RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value, RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value}:
+        if session["status"] in {
+            RunStatus.AWAITING_PLAN_APPROVAL.value,
+            RunStatus.AWAITING_PHASE_APPROVAL.value,
+            RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value,
+            RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value,
+        }:
             if session["status"] == RunStatus.AWAITING_PHASE_APPROVAL.value:
                 self._mark_remaining_steps_skipped(
                     session,
                     "Skipped because the run was cancelled before the next approval boundary.",
                 )
-            self._apply_terminal_status(session, RunStatus.CANCELLED, "Run was cancelled. No further execution will occur.", reason)
+            self._apply_terminal_status(
+                session,
+                RunStatus.CANCELLED,
+                "Run was cancelled. No further execution will occur.",
+                reason,
+            )
         else:
             session["status"] = RunStatus.CANCELLING.value
-            session["activity"].append("Cancellation requested. Execution will stop at the next safe boundary.")
+            session["activity"].append(
+                "Cancellation requested. Execution will stop at the next safe boundary."
+            )
             self._persist_session(session)
         return self.get_run_state(session_id)
 
@@ -849,13 +958,17 @@ class AxiomRunManager:
                 if self._check_cancelled(session):
                     return
 
-                interpretation = interpretation_from_dict(session["task_interpretation"])
+                interpretation = interpretation_from_dict(
+                    session["task_interpretation"]
+                )
                 if interpretation.action == TaskAction.COMPLEX.value:
                     if session.get("completed_subtask_indices") is None:
                         session["completed_subtask_indices"] = []
 
                     # Find next unblocked subtask based on dependencies
-                    if session.get("current_subtask_index", -1) in session.get("completed_subtask_indices", []):
+                    if session.get("current_subtask_index", -1) in session.get(
+                        "completed_subtask_indices", []
+                    ):
                         session["current_subtask_index"] = -1
 
                     if session.get("current_subtask_index", -1) == -1:
@@ -872,10 +985,20 @@ class AxiomRunManager:
                                     # or we check if ALL dependencies are met. A more robust ID system
                                     # would be better, but we do best effort matching against descriptions.
                                     dep_found_and_done = False
-                                    for done_idx in session["completed_subtask_indices"]:
-                                        if interpretation.subtasks and done_idx < len(interpretation.subtasks):
-                                            done_desc = interpretation.subtasks[done_idx].description
-                                            if dep.lower() in done_desc.lower() or done_desc.lower() in dep.lower() or dep == str(done_idx):
+                                    for done_idx in session[
+                                        "completed_subtask_indices"
+                                    ]:
+                                        if interpretation.subtasks and done_idx < len(
+                                            interpretation.subtasks
+                                        ):
+                                            done_desc = interpretation.subtasks[
+                                                done_idx
+                                            ].description
+                                            if (
+                                                dep.lower() in done_desc.lower()
+                                                or done_desc.lower() in dep.lower()
+                                                or dep == str(done_idx)
+                                            ):
                                                 dep_found_and_done = True
                                                 break
                                     if not dep_found_and_done:
@@ -889,36 +1012,70 @@ class AxiomRunManager:
                         session["current_subtask_index"] = next_index
                         self._persist_session(session)
 
-                    if session["current_subtask_index"] == -1 or session["current_subtask_index"] >= len(interpretation.subtasks or []):
+                    if session["current_subtask_index"] == -1 or session[
+                        "current_subtask_index"
+                    ] >= len(interpretation.subtasks or []):
                         # No more available subtasks. Either we're done, or blocked by dependencies.
-                        if len(session.get("completed_subtask_indices", [])) < len(interpretation.subtasks or []):
-                            self._apply_terminal_status(session, RunStatus.FAILED, "Deadlock: remaining subtasks have unsatisfied dependencies.", None)
+                        if len(session.get("completed_subtask_indices", [])) < len(
+                            interpretation.subtasks or []
+                        ):
+                            self._apply_terminal_status(
+                                session,
+                                RunStatus.FAILED,
+                                "Deadlock: remaining subtasks have unsatisfied dependencies.",
+                                None,
+                            )
                             return
 
-                        llm_settings = LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict())
+                        llm_settings = LLMSettings.from_dict(
+                            session.get("llm_settings")
+                            or self.llm_settings_manager.get_settings().to_dict()
+                        )
                         project_root = session["project_root"]
-                        artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+                        artifact_manager = ArtifactManager(
+                            project_root, run_id=session["artifact_run_id"]
+                        )
 
                         # Compress history if enabled and threshold exceeded
-                        if llm_settings.compression_enabled and interpretation.subtasks is not None:
-                             uncompressed_count = session["current_subtask_index"] - interpretation.compressed_subtask_count
-                             if uncompressed_count >= llm_settings.compression_threshold:
-                                 compress_service = LocalLLMCompressService(settings=llm_settings)
-                                 subtasks_to_compress = interpretation.subtasks[interpretation.compressed_subtask_count:session["current_subtask_index"]]
+                        if (
+                            llm_settings.compression_enabled
+                            and interpretation.subtasks is not None
+                        ):
+                            uncompressed_count = (
+                                session["current_subtask_index"]
+                                - interpretation.compressed_subtask_count
+                            )
+                            if uncompressed_count >= llm_settings.compression_threshold:
+                                compress_service = LocalLLMCompressService(
+                                    settings=llm_settings
+                                )
+                                subtasks_to_compress = interpretation.subtasks[
+                                    interpretation.compressed_subtask_count : session[
+                                        "current_subtask_index"
+                                    ]
+                                ]
 
-                                 compressed_text, compress_summary = compress_service.generate_compression(
-                                     artifact_manager=artifact_manager,
-                                     interpretation=interpretation,
-                                     subtasks_to_compress=subtasks_to_compress,
-                                     existing_compressed_history=interpretation.compressed_history,
-                                 )
+                                compressed_text, compress_summary = (
+                                    compress_service.generate_compression(
+                                        artifact_manager=artifact_manager,
+                                        interpretation=interpretation,
+                                        subtasks_to_compress=subtasks_to_compress,
+                                        existing_compressed_history=interpretation.compressed_history,
+                                    )
+                                )
 
-                                 if compressed_text:
-                                     interpretation.compressed_history = compressed_text
-                                     interpretation.compressed_subtask_count = session["current_subtask_index"]
-                                     session["task_interpretation"] = interpretation.to_dict()
-                                     session["activity"].append(f"Compressed {len(subtasks_to_compress)} subtasks into history.")
-                                     self._persist_session(session)
+                                if compressed_text:
+                                    interpretation.compressed_history = compressed_text
+                                    interpretation.compressed_subtask_count = session[
+                                        "current_subtask_index"
+                                    ]
+                                    session["task_interpretation"] = (
+                                        interpretation.to_dict()
+                                    )
+                                    session["activity"].append(
+                                        f"Compressed {len(subtasks_to_compress)} subtasks into history."
+                                    )
+                                    self._persist_session(session)
 
                         # Try to replan
                         replan_service = LocalLLMReplanService(settings=llm_settings)
@@ -928,8 +1085,12 @@ class AxiomRunManager:
                             session["request"].get("protectedPaths", []),
                         )
                         verification = verification_from_dict(session["verification"])
-                        repo_index_summary = repo_index_summary_from_dict(session["repo_index_summary"])
-                        project_memory = project_memory_from_dict(session.get("project_memory"))
+                        repo_index_summary = repo_index_summary_from_dict(
+                            session["repo_index_summary"]
+                        )
+                        project_memory = project_memory_from_dict(
+                            session.get("project_memory")
+                        )
 
                         replan_payload, llm_summary = replan_service.generate_replan(
                             artifact_manager=artifact_manager,
@@ -947,7 +1108,9 @@ class AxiomRunManager:
                                 if candidate not in session["artifact_references"]:
                                     session["artifact_references"].append(candidate)
 
-                        if replan_payload is None or replan_payload.get("is_complete", True):
+                        if replan_payload is None or replan_payload.get(
+                            "is_complete", True
+                        ):
                             self._finalize_session(session)
                             return
 
@@ -959,62 +1122,91 @@ class AxiomRunManager:
                                 target_path=st.get("target_path"),
                                 command=st.get("command"),
                                 dependencies=st.get("dependencies", []),
-                            ) for st in replan_payload.get("new_subtasks", [])
+                            )
+                            for st in replan_payload.get("new_subtasks", [])
                         ]
 
                         if not new_subtasks:
-                             # Failsafe if it says not complete but gives no tasks
-                             self._finalize_session(session)
-                             return
+                            # Failsafe if it says not complete but gives no tasks
+                            self._finalize_session(session)
+                            return
 
                         if interpretation.subtasks is None:
                             interpretation.subtasks = []
                         interpretation.subtasks.extend(new_subtasks)
                         session["task_interpretation"] = interpretation.to_dict()
-                        session["subtasks"] = [st.to_dict() for st in interpretation.subtasks]
-                        session["status"] = RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value
-                        session["activity"].append("Replanning identified additional subtasks needed. Awaiting decomposition approval.")
+                        session["subtasks"] = [
+                            st.to_dict() for st in interpretation.subtasks
+                        ]
+                        session["status"] = (
+                            RunStatus.AWAITING_DECOMPOSITION_APPROVAL.value
+                        )
+                        session["activity"].append(
+                            "Replanning identified additional subtasks needed. Awaiting decomposition approval."
+                        )
                         self._persist_session(session)
                         return
 
                     subtasks_list = interpretation.subtasks or []
                     subtask = subtasks_list[session["current_subtask_index"]]
-                    if session.get("current_subtask_content") is None and session.get("current_subtask_command") is None and subtask.action in {"create_file", "modify_file", "run_command"}:
-                         # We need to implement this subtask
-                         self._generate_and_await_implementation(session, subtask)
-                         return
+                    if (
+                        session.get("current_subtask_content") is None
+                        and session.get("current_subtask_command") is None
+                        and subtask.action
+                        in {"create_file", "modify_file", "run_command"}
+                    ):
+                        # We need to implement this subtask
+                        self._generate_and_await_implementation(session, subtask)
+                        return
                     else:
-                         self._execute_subtask(session, subtask)
+                        self._execute_subtask(session, subtask)
 
-                         # If subtask paused for approval, wait for human input
-                         if session["status"] not in {RunStatus.RUNNING.value} and session["status"] not in TERMINAL_RUN_STATUSES:
-                             return
+                        # If subtask paused for approval, wait for human input
+                        if (
+                            session["status"] not in {RunStatus.RUNNING.value}
+                            and session["status"] not in TERMINAL_RUN_STATUSES
+                        ):
+                            return
 
-                         if session["status"] in TERMINAL_RUN_STATUSES:
-                             # Rather than strictly returning, if a subtask fails, we could potentially trigger replan here.
-                             # For now, we follow the simple path of failing if a subtask fails terminally.
-                             return
+                        if session["status"] in TERMINAL_RUN_STATUSES:
+                            # Rather than strictly returning, if a subtask fails, we could potentially trigger replan here.
+                            # For now, we follow the simple path of failing if a subtask fails terminally.
+                            return
 
-                         # Update the main task interpretation in session to capture the subtask's result_summary
-                         session["task_interpretation"] = interpretation.to_dict()
+                        # Update the main task interpretation in session to capture the subtask's result_summary
+                        session["task_interpretation"] = interpretation.to_dict()
 
-                         session["completed_subtask_indices"].append(session["current_subtask_index"])
-                         session["current_subtask_index"] = -1
-                         session["current_subtask_content"] = None
-                         session["current_subtask_command"] = None
-                         continue
-
+                        session["completed_subtask_indices"].append(
+                            session["current_subtask_index"]
+                        )
+                        session["current_subtask_index"] = -1
+                        session["current_subtask_content"] = None
+                        session["current_subtask_command"] = None
+                        continue
 
                 if session["next_phase_index"] >= len(session["phase_order"]):
                     self._finalize_session(session)
                     return
                 phase = session["phase_order"][session["next_phase_index"]]
-                policy = next((item for item in session.get("phase_policies", []) if item["phase"] == phase), None)
-                if session["approval_mode"] == ApprovalMode.PHASED.value and policy is not None and policy["approval_required"]:
+                policy = next(
+                    (
+                        item
+                        for item in session.get("phase_policies", [])
+                        if item["phase"] == phase
+                    ),
+                    None,
+                )
+                if (
+                    session["approval_mode"] == ApprovalMode.PHASED.value
+                    and policy is not None
+                    and policy["approval_required"]
+                ):
                     if session.get("approved_phase") != phase:
                         session["pending_phase"] = phase
                         session["status"] = RunStatus.AWAITING_PHASE_APPROVAL.value
-                        session["activity"].append(f"Waiting for approval of phase '{phase}'.")
+                        session["activity"].append(
+                            f"Waiting for approval of phase '{phase}'."
+                        )
                         self._persist_session(session)
                         return
                     session["approved_phase"] = None
@@ -1034,7 +1226,12 @@ class AxiomRunManager:
                 self._persist_session(session)
         except Exception as error:
             import traceback
-            session["final_execution_result"] = ExecutionResult(success=False, message=str(error), details={"traceback": traceback.format_exc()}).to_dict()
+
+            session["final_execution_result"] = ExecutionResult(
+                success=False,
+                message=str(error),
+                details={"traceback": traceback.format_exc()},
+            ).to_dict()
             session["status"] = RunStatus.FAILED.value
             session["activity"].append(f"Run failed unexpectedly: {error}")
             self._persist_session(session)
@@ -1056,8 +1253,13 @@ class AxiomRunManager:
 
     def _generate_and_await_implementation(self, session: dict, subtask) -> None:
         project_root = session["project_root"]
-        llm_settings = LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict())
-        artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+        llm_settings = LLMSettings.from_dict(
+            session.get("llm_settings")
+            or self.llm_settings_manager.get_settings().to_dict()
+        )
+        artifact_manager = ArtifactManager(
+            project_root, run_id=session["artifact_run_id"]
+        )
         scope_manager = ScopeManager(
             project_root,
             session["request"].get("scopePaths", []),
@@ -1068,10 +1270,12 @@ class AxiomRunManager:
 
         existing_content = None
         if subtask.action in {"modify_file"} and subtask.target_path:
-             workspace = WorkspaceManager(project_root, PermissionSet(**session["permissions"]), scope_manager)
-             target = workspace.resolve_path(subtask.target_path)
-             if target.exists():
-                  existing_content = workspace.read_text(subtask.target_path)
+            workspace = WorkspaceManager(
+                project_root, PermissionSet(**session["permissions"]), scope_manager
+            )
+            target = workspace.resolve_path(subtask.target_path)
+            if target.exists():
+                existing_content = workspace.read_text(subtask.target_path)
 
         if subtask.action not in {"create_file", "modify_file", "run_command"}:
             session["status"] = RunStatus.RUNNING.value
@@ -1080,124 +1284,158 @@ class AxiomRunManager:
 
         implement_service = LocalLLMImplementService(settings=llm_settings)
         result_payload, llm_summary = implement_service.generate_implementation(
-             artifact_manager=artifact_manager,
-             subtask=subtask,
-             scope_manager=scope_manager,
-             repo_index_summary=repo_index_summary,
-             project_memory=project_memory,
-             existing_content=existing_content,
+            artifact_manager=artifact_manager,
+            subtask=subtask,
+            scope_manager=scope_manager,
+            repo_index_summary=repo_index_summary,
+            project_memory=project_memory,
+            existing_content=existing_content,
         )
 
         if result_payload is None:
-             self._apply_terminal_status(session, RunStatus.FAILED, f"Failed to generate implementation for subtask: {subtask.description}", None)
-             return
+            self._apply_terminal_status(
+                session,
+                RunStatus.FAILED,
+                f"Failed to generate implementation for subtask: {subtask.description}",
+                None,
+            )
+            return
 
         if subtask.action in {"create_file", "modify_file"}:
-             session["current_subtask_content"] = result_payload
+            session["current_subtask_content"] = result_payload
         else:
-             session["current_subtask_command"] = result_payload
+            session["current_subtask_command"] = result_payload
 
         session["status"] = RunStatus.AWAITING_IMPLEMENTATION_APPROVAL.value
-        session["activity"].append(f"Generated implementation for subtask {session['current_subtask_index']}. Awaiting approval.")
+        session["activity"].append(
+            f"Generated implementation for subtask {session['current_subtask_index']}. Awaiting approval."
+        )
 
         if llm_summary is not None:
-             for artifact in llm_summary.artifact_references:
-                  candidate = artifact.to_dict()
-                  if candidate not in session["artifact_references"]:
-                       session["artifact_references"].append(candidate)
+            for artifact in llm_summary.artifact_references:
+                candidate = artifact.to_dict()
+                if candidate not in session["artifact_references"]:
+                    session["artifact_references"].append(candidate)
 
         self._persist_session(session)
 
     def _execute_subtask(self, session: dict, subtask) -> None:
-         # Construct a task interpretation dynamically from the subtask state
-         from models import TaskAction, TaskInterpretation
-         try:
-             action_val = TaskAction(subtask.action)
-         except ValueError:
-             action_val = TaskAction.UNKNOWN
+        # Construct a task interpretation dynamically from the subtask state
+        from models import TaskAction, TaskInterpretation
 
-         interpretation = TaskInterpretation(
-             raw_task=subtask.description,
-             summary=subtask.description,
-             action=action_val,
-             target_path=subtask.target_path,
-             command=session.get("current_subtask_command") if subtask.action == "run_command" else None,
-             content=session.get("current_subtask_content") if subtask.action in {"create_file", "modify_file"} else None,
-             snapshot_id=None,
-         )
+        try:
+            action_val = TaskAction(subtask.action)
+        except ValueError:
+            action_val = TaskAction.UNKNOWN
 
-         # Convert into a fake Plan and execution payload to leverage existing logic
-         from planner import Planner
-         project_root = session["project_root"]
-         orchestrator = Orchestrator(project_root)
-         scope_manager = ScopeManager(
+        interpretation = TaskInterpretation(
+            raw_task=subtask.description,
+            summary=subtask.description,
+            action=action_val,
+            target_path=subtask.target_path,
+            command=(
+                session.get("current_subtask_command")
+                if subtask.action == "run_command"
+                else None
+            ),
+            content=(
+                session.get("current_subtask_content")
+                if subtask.action in {"create_file", "modify_file"}
+                else None
+            ),
+            snapshot_id=None,
+        )
+
+        # Convert into a fake Plan and execution payload to leverage existing logic
+        from planner import Planner
+
+        project_root = session["project_root"]
+        scope_manager = ScopeManager(
             project_root,
             session["request"].get("scopePaths", []),
             session["request"].get("protectedPaths", []),
-         )
-         verification = verification_from_dict(session["verification"])
-         repo_index_summary = repo_index_summary_from_dict(session["repo_index_summary"])
+        )
+        verification = verification_from_dict(session["verification"])
+        repo_index_summary = repo_index_summary_from_dict(session["repo_index_summary"])
 
-         plan = Planner().build_plan(
-             Mode(session["mode"]),
-             interpretation,
-             scope_manager,
-             verification,
-             repo_index_summary,
-         )
+        plan = Planner().build_plan(
+            Mode(session["mode"]),
+            interpretation,
+            scope_manager,
+            verification,
+            repo_index_summary,
+        )
 
-         if plan is None:
-             raise RuntimeError("Could not construct a valid plan for subtask execution")
+        if plan is None:
+            raise RuntimeError("Could not construct a valid plan for subtask execution")
 
-         session["plan"] = plan.to_dict() # override the session's plan for this subtask to allow _execute_phase to reuse logic
-         phase_order = ["understand", "modify", "verify"]
+        session["plan"] = (
+            plan.to_dict()
+        )  # override the session's plan for this subtask to allow _execute_phase to reuse logic
+        phase_order = ["understand", "modify", "verify"]
 
-         # Initialize the subtask phase loop explicitly
-         if "subtask_phase_index" not in session or session["subtask_phase_index"] >= len(phase_order):
-             session["subtask_phase_index"] = 0
+        # Initialize the subtask phase loop explicitly
+        if "subtask_phase_index" not in session or session[
+            "subtask_phase_index"
+        ] >= len(phase_order):
+            session["subtask_phase_index"] = 0
 
-         while session["subtask_phase_index"] < len(phase_order):
-             phase = phase_order[session["subtask_phase_index"]]
+        while session["subtask_phase_index"] < len(phase_order):
+            phase = phase_order[session["subtask_phase_index"]]
 
-             # Apply phase policies dynamically if phased approval is enabled
-             policy = next((item for item in session.get("phase_policies", []) if item["phase"] == phase), None)
-             if session["approval_mode"] == ApprovalMode.PHASED.value and policy is not None and policy["approval_required"]:
-                 if session.get("approved_phase") != phase:
-                     session["pending_phase"] = phase
-                     session["status"] = RunStatus.AWAITING_PHASE_APPROVAL.value
-                     session["activity"].append(f"Waiting for approval of phase '{phase}'.")
-                     self._persist_session(session)
-                     return
-                 session["approved_phase"] = None
+            # Apply phase policies dynamically if phased approval is enabled
+            policy = next(
+                (
+                    item
+                    for item in session.get("phase_policies", [])
+                    if item["phase"] == phase
+                ),
+                None,
+            )
+            if (
+                session["approval_mode"] == ApprovalMode.PHASED.value
+                and policy is not None
+                and policy["approval_required"]
+            ):
+                if session.get("approved_phase") != phase:
+                    session["pending_phase"] = phase
+                    session["status"] = RunStatus.AWAITING_PHASE_APPROVAL.value
+                    session["activity"].append(
+                        f"Waiting for approval of phase '{phase}'."
+                    )
+                    self._persist_session(session)
+                    return
+                session["approved_phase"] = None
 
-             if policy is not None and policy["auto_run_allowed"]:
-                 policy["auto_ran"] = True
-                 session["status"] = RunStatus.AUTO_RUNNING_READ_ONLY_PHASE.value
-                 session["activity"].append(
-                     f"Auto-ran phase '{phase}' because it is system-classified as {policy['classification']}."
-                 )
-             else:
-                 session["status"] = RunStatus.RUNNING.value
+            if policy is not None and policy["auto_run_allowed"]:
+                policy["auto_ran"] = True
+                session["status"] = RunStatus.AUTO_RUNNING_READ_ONLY_PHASE.value
+                session["activity"].append(
+                    f"Auto-ran phase '{phase}' because it is system-classified as {policy['classification']}."
+                )
+            else:
+                session["status"] = RunStatus.RUNNING.value
 
-             self._persist_session(session)
-             self._execute_phase(session, phase)
+            self._persist_session(session)
+            self._execute_phase(session, phase)
 
-             if session["status"] in TERMINAL_RUN_STATUSES:
-                  return
+            if session["status"] in TERMINAL_RUN_STATUSES:
+                return
 
-             session["subtask_phase_index"] += 1
+            session["subtask_phase_index"] += 1
 
-         # Once we are done with the inner subtask phase loop, reset the index for the next subtask
-         session["subtask_phase_index"] = 0
+        # Once we are done with the inner subtask phase loop, reset the index for the next subtask
+        session["subtask_phase_index"] = 0
 
-         # Record result summary
-         if session["step_results"]:
-             last_step = session["step_results"][-1]
-             if "details" in last_step:
-                  subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}. Details: {last_step['details']}"
-             else:
-                  subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}"
-
+        # Record result summary
+        if session["step_results"]:
+            last_step = session["step_results"][-1]
+            if "details" in last_step:
+                subtask.result_summary = f"Status: {last_step['status']}. Message: {last_step['message']}. Details: {last_step['details']}"
+            else:
+                subtask.result_summary = (
+                    f"Status: {last_step['status']}. Message: {last_step['message']}"
+                )
 
     def _execute_phase(self, session: dict, phase: str) -> None:
         plan = plan_from_dict(session["plan"])
@@ -1215,7 +1453,11 @@ class AxiomRunManager:
         # If it's a COMPLEX action, use the dynamic subtask interpretation we construct inside _execute_subtask
         # Otherwise, stick to the root interpretation.
         from models import TaskAction, TaskInterpretation
-        if interpretation.action == TaskAction.COMPLEX.value and interpretation.subtasks:
+
+        if (
+            interpretation.action == TaskAction.COMPLEX.value
+            and interpretation.subtasks
+        ):
             subtask = interpretation.subtasks[session["current_subtask_index"]]
 
             # Use TaskAction for standard actions, fallback to UNKNOWN for unsupported like 'analyze'
@@ -1229,8 +1471,16 @@ class AxiomRunManager:
                 summary=subtask.description,
                 action=action_val,
                 target_path=subtask.target_path,
-                command=session.get("current_subtask_command") if subtask.action == "run_command" else None,
-                content=session.get("current_subtask_content") if subtask.action in {"create_file", "modify_file"} else None,
+                command=(
+                    session.get("current_subtask_command")
+                    if subtask.action == "run_command"
+                    else None
+                ),
+                content=(
+                    session.get("current_subtask_content")
+                    if subtask.action in {"create_file", "modify_file"}
+                    else None
+                ),
                 snapshot_id=None,
             )
         elif interpretation.action == TaskAction.COMPLEX.value:
@@ -1238,14 +1488,18 @@ class AxiomRunManager:
             interpretation.action = TaskAction.UNKNOWN.value  # type: ignore
 
         orchestrator = Orchestrator(project_root)
-        artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+        artifact_manager = ArtifactManager(
+            project_root, run_id=session["artifact_run_id"]
+        )
         scope_manager = ScopeManager(
             project_root,
             session["request"].get("scopePaths", []),
             session["request"].get("protectedPaths", []),
         )
         workspace = WorkspaceManager(project_root, permissions, scope_manager)
-        terminal = TerminalRunner(project_root, permissions, command_policy, artifact_manager)
+        terminal = TerminalRunner(
+            project_root, permissions, command_policy, artifact_manager
+        )
         verification_manager = VerificationManager(verification, workspace, terminal)
         snapshots = SnapshotManager(project_root)
         step_results = [step_result_from_dict(item) for item in session["step_results"]]
@@ -1269,7 +1523,11 @@ class AxiomRunManager:
                 session["last_command_result"] = candidate
                 if command.cancelled:
                     session["cancellation_requested"] = True
-            for artifact in [artifact_manager.run_reference()] + [command.artifact_reference for command in terminal.commands_run if command.artifact_reference is not None]:
+            for artifact in [artifact_manager.run_reference()] + [
+                command.artifact_reference
+                for command in terminal.commands_run
+                if command.artifact_reference is not None
+            ]:
                 candidate = artifact.to_dict()
                 if candidate not in session["artifact_references"]:
                     session["artifact_references"].append(candidate)
@@ -1306,7 +1564,11 @@ class AxiomRunManager:
                         details={},
                     )
                 )
-            remaining_steps = [candidate for candidate in plan.steps if candidate.id not in {item.step_id for item in step_results}]
+            remaining_steps = [
+                candidate
+                for candidate in plan.steps
+                if candidate.id not in {item.step_id for item in step_results}
+            ]
             step_results.extend(orchestrator._skip_remaining_steps(remaining_steps))
             merge_runtime_state()
             session["step_results"] = [item.to_dict() for item in step_results]
@@ -1314,7 +1576,9 @@ class AxiomRunManager:
             if session.get("cancellation_requested"):
                 self._check_cancelled(session)
             else:
-                session["initial_execution_result"] = ExecutionResult(success=False, message=str(error), details={}).to_dict()
+                session["initial_execution_result"] = ExecutionResult(
+                    success=False, message=str(error), details={}
+                ).to_dict()
                 self._finalize_session(session)
             return
 
@@ -1326,9 +1590,14 @@ class AxiomRunManager:
             return
         phase_results = orchestrator._build_phase_results_with_policy(
             step_results,
-            [phase_policy_from_dict(item) for item in session.get("phase_policies", [])],
+            [
+                phase_policy_from_dict(item)
+                for item in session.get("phase_policies", [])
+            ],
         )
-        session["phase_results"] = [phase_result.to_dict() for phase_result in phase_results]
+        session["phase_results"] = [
+            phase_result.to_dict() for phase_result in phase_results
+        ]
         session["activity"].append(f"Phase '{phase}' completed.")
         session["pending_phase"] = None
         self._persist_session(session)
@@ -1351,7 +1620,9 @@ class AxiomRunManager:
         cancellation_event: Event,
     ) -> None:
         if cancellation_event.is_set():
-            raise RuntimeError("Run cancellation was requested before the phase started.")
+            raise RuntimeError(
+                "Run cancellation was requested before the phase started."
+            )
         action = interpretation.action
         if action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}:
             self._execute_file_phase(
@@ -1398,7 +1669,9 @@ class AxiomRunManager:
                 cancellation_event,
             )
             return
-        raise RuntimeError("This session manager supports only the current IMPLEMENT action set.")
+        raise RuntimeError(
+            "This session manager supports only the current IMPLEMENT action set."
+        )
 
     def _execute_file_phase(
         self,
@@ -1422,21 +1695,43 @@ class AxiomRunManager:
             existed_before = target.exists()
             if action == TaskAction.MODIFY_FILE and existed_before:
                 workspace.read_text(interpretation.target_path)
-            message = "Existing file state inspected." if action == TaskAction.MODIFY_FILE else "Target path inspected."
-            step_results.append(orchestrator._completed_step(step, message, {"target_path": interpretation.target_path, "already_exists": existed_before}))
-            return
-        if phase == "modify":
-            if cancellation_event.is_set():
-                raise RuntimeError("Run cancellation was requested before the file write started.")
-            scope_manager.enforce_write(target)
-            existed_before = target.exists()
-            workspace.write_text(interpretation.target_path, interpretation.content)
-            message = "Requested file content was overwritten." if action == TaskAction.MODIFY_FILE else "Requested file content was written."
+            message = (
+                "Existing file state inspected."
+                if action == TaskAction.MODIFY_FILE
+                else "Target path inspected."
+            )
             step_results.append(
                 orchestrator._completed_step(
                     step,
                     message,
-                    {"target_path": interpretation.target_path, "created_new_file": not existed_before},
+                    {
+                        "target_path": interpretation.target_path,
+                        "already_exists": existed_before,
+                    },
+                )
+            )
+            return
+        if phase == "modify":
+            if cancellation_event.is_set():
+                raise RuntimeError(
+                    "Run cancellation was requested before the file write started."
+                )
+            scope_manager.enforce_write(target)
+            existed_before = target.exists()
+            workspace.write_text(interpretation.target_path, interpretation.content)
+            message = (
+                "Requested file content was overwritten."
+                if action == TaskAction.MODIFY_FILE
+                else "Requested file content was written."
+            )
+            step_results.append(
+                orchestrator._completed_step(
+                    step,
+                    message,
+                    {
+                        "target_path": interpretation.target_path,
+                        "created_new_file": not existed_before,
+                    },
                 )
             )
             return
@@ -1470,31 +1765,56 @@ class AxiomRunManager:
     ) -> None:
         assert interpretation.command is not None
         if phase == "understand":
-            step_results.append(orchestrator._completed_step(step, "Command context confirmed.", {"command": interpretation.command, "project_root": str(Path(terminal.project_root).resolve())}))
+            step_results.append(
+                orchestrator._completed_step(
+                    step,
+                    "Command context confirmed.",
+                    {
+                        "command": interpretation.command,
+                        "project_root": str(Path(terminal.project_root).resolve()),
+                    },
+                )
+            )
             return
         if phase == "modify":
-            result = terminal.run(interpretation.command, cancellation_event=cancellation_event)
+            result = terminal.run(
+                interpretation.command, cancellation_event=cancellation_event
+            )
             step_results.append(
                 StepResult(
                     step_id=step.id,
                     title=step.title,
                     step_type=step.step_type,
-                    status=StepStatus.COMPLETED if result.success else StepStatus.FAILED,
+                    status=(
+                        StepStatus.COMPLETED if result.success else StepStatus.FAILED
+                    ),
                     message=result.summary,
                     phase=step.phase,
                     details=result.to_dict(),
                 )
             )
             if not result.success:
-                remaining_steps = [candidate for candidate in plan.steps if candidate.id not in {item.step_id for item in step_results}]
+                remaining_steps = [
+                    candidate
+                    for candidate in plan.steps
+                    if candidate.id not in {item.step_id for item in step_results}
+                ]
                 step_results.extend(orchestrator._skip_remaining_steps(remaining_steps))
                 if result.cancelled:
                     session["cancellation_requested"] = True
                 else:
-                    session["initial_execution_result"] = ExecutionResult(success=False, message="Command execution failed.", details=result.to_dict()).to_dict()
+                    session["initial_execution_result"] = ExecutionResult(
+                        success=False,
+                        message="Command execution failed.",
+                        details=result.to_dict(),
+                    ).to_dict()
             return
         if phase == "verify":
-            command_result = command_result_from_dict(session["last_command_result"]) if session["last_command_result"] is not None else None
+            command_result = (
+                command_result_from_dict(session["last_command_result"])
+                if session["last_command_result"] is not None
+                else None
+            )
             verification_step = orchestrator._run_verification_step(
                 step=step,
                 action=TaskAction.RUN_COMMAND,
@@ -1525,17 +1845,33 @@ class AxiomRunManager:
     ) -> None:
         if phase == "understand":
             requested = interpretation.snapshot_id or "latest snapshot"
-            reference = snapshots.latest_snapshot() if interpretation.snapshot_id is None else snapshots._reference_for(interpretation.snapshot_id)
+            reference = (
+                snapshots.latest_snapshot()
+                if interpretation.snapshot_id is None
+                else snapshots._reference_for(interpretation.snapshot_id)
+            )
             session["last_restore_reference"] = reference.to_dict()
-            step_results.append(orchestrator._completed_step(step, "Snapshot source identified.", {"requested_snapshot": requested, **reference.to_dict()}))
+            step_results.append(
+                orchestrator._completed_step(
+                    step,
+                    "Snapshot source identified.",
+                    {"requested_snapshot": requested, **reference.to_dict()},
+                )
+            )
             return
         if phase == "modify":
             if cancellation_event.is_set():
-                raise RuntimeError("Run cancellation was requested before restore began.")
+                raise RuntimeError(
+                    "Run cancellation was requested before restore began."
+                )
             scope_manager.enforce_full_workspace_write("restore")
             restored = snapshots.restore_snapshot(interpretation.snapshot_id)
             session["last_restore_reference"] = restored.to_dict()
-            step_results.append(orchestrator._completed_step(step, "Workspace restored from snapshot.", restored.to_dict()))
+            step_results.append(
+                orchestrator._completed_step(
+                    step, "Workspace restored from snapshot.", restored.to_dict()
+                )
+            )
             return
         if phase == "verify":
             verification_step = orchestrator._run_verification_step(
@@ -1573,11 +1909,16 @@ class AxiomRunManager:
         orchestrator = Orchestrator(session["project_root"])
         phase_results = orchestrator._build_phase_results_with_policy(
             [step_result_from_dict(item) for item in session["step_results"]],
-            [phase_policy_from_dict(item) for item in session.get("phase_policies", [])],
+            [
+                phase_policy_from_dict(item)
+                for item in session.get("phase_policies", [])
+            ],
         )
         session["phase_results"] = [phase.to_dict() for phase in phase_results]
 
-    def _apply_terminal_status(self, session: dict, status: RunStatus, message: str, reason: str | None) -> None:
+    def _apply_terminal_status(
+        self, session: dict, status: RunStatus, message: str, reason: str | None
+    ) -> None:
         session["status"] = status.value
         session["pending_phase"] = None
         session["final_execution_result"] = {
@@ -1585,7 +1926,9 @@ class AxiomRunManager:
             "message": message,
             "details": {"reason": reason} if reason else {},
         }
-        session["activity"].append(message if not reason else f"{message} Reason: {reason}")
+        session["activity"].append(
+            message if not reason else f"{message} Reason: {reason}"
+        )
         self._persist_session(session)
 
     def _finalize_session(self, session: dict) -> None:
@@ -1602,12 +1945,19 @@ class AxiomRunManager:
         project_memory = project_memory_from_dict(session.get("project_memory"))
         llm_summary = llm_summary_from_dict(session.get("llm_summary"))
         llm_review_summary = llm_summary_from_dict(session.get("llm_review_summary"))
-        artifact_references = [ArtifactReference(**artifact) for artifact in session["artifact_references"]]
+        artifact_references = [
+            ArtifactReference(**artifact) for artifact in session["artifact_references"]
+        ]
         step_results = [step_result_from_dict(item) for item in session["step_results"]]
 
-        llm_settings = LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict())
+        llm_settings = LLMSettings.from_dict(
+            session.get("llm_settings")
+            or self.llm_settings_manager.get_settings().to_dict()
+        )
         orchestrator = Orchestrator(project_root, llm_settings=llm_settings)
-        artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
+        artifact_manager = ArtifactManager(
+            project_root, run_id=session["artifact_run_id"]
+        )
         scope_manager = ScopeManager(
             project_root,
             session["request"].get("scopePaths", []),
@@ -1616,38 +1966,64 @@ class AxiomRunManager:
         workspace = WorkspaceManager(project_root, permissions, scope_manager)
         workspace.files_read = list(session["files_read"])
         workspace.files_modified = list(session["files_modified"])
-        workspace.blocked_actions = [blocked_action_from_dict(item) for item in session["blocked_actions"]]
-        terminal = TerminalRunner(project_root, permissions, command_policy, artifact_manager)
-        terminal.commands_run = [command_result_from_dict(item) for item in session["commands_run"]]
+        workspace.blocked_actions = [
+            blocked_action_from_dict(item) for item in session["blocked_actions"]
+        ]
+        terminal = TerminalRunner(
+            project_root, permissions, command_policy, artifact_manager
+        )
+        terminal.commands_run = [
+            command_result_from_dict(item) for item in session["commands_run"]
+        ]
         verification_manager = VerificationManager(verification, workspace, terminal)
 
         if session.get("cancellation_requested"):
-            self._mark_remaining_steps_skipped(session, "Skipped because the run was cancelled.")
-            self._apply_terminal_status(session, RunStatus.CANCELLED, "Run was cancelled. No further execution will occur.", session.get("cancel_reason"))
+            self._mark_remaining_steps_skipped(
+                session, "Skipped because the run was cancelled."
+            )
+            self._apply_terminal_status(
+                session,
+                RunStatus.CANCELLED,
+                "Run was cancelled. No further execution will occur.",
+                session.get("cancel_reason"),
+            )
             return
 
         if session["initial_execution_result"] is None:
-            session["initial_execution_result"] = self._build_success_execution_result(session).to_dict()
-        initial_execution_result = ExecutionResult(**session["initial_execution_result"])
-        final_execution_result, failure_classification, repair_summary = orchestrator._handle_post_execution_failure(
-            artifact_manager=artifact_manager,
-            artifact_references=artifact_references,
-            auto_repair=bool(session["request"].get("autoRepair", False)),
-            initial_execution_result=initial_execution_result,
-            step_results=step_results,
-            workspace=workspace,
-            terminal=terminal,
-            verification_manager=verification_manager,
-            interpretation=interpretation,
-            verification=verification,
-            repo_index_summary=repo_index_summary,
-            scope_manager=scope_manager,
+            session["initial_execution_result"] = self._build_success_execution_result(
+                session
+            ).to_dict()
+        initial_execution_result = ExecutionResult(
+            **session["initial_execution_result"]
+        )
+        final_execution_result, failure_classification, repair_summary = (
+            orchestrator._handle_post_execution_failure(
+                artifact_manager=artifact_manager,
+                artifact_references=artifact_references,
+                auto_repair=bool(session["request"].get("autoRepair", False)),
+                initial_execution_result=initial_execution_result,
+                step_results=step_results,
+                workspace=workspace,
+                terminal=terminal,
+                verification_manager=verification_manager,
+                interpretation=interpretation,
+                verification=verification,
+                repo_index_summary=repo_index_summary,
+                scope_manager=scope_manager,
+            )
         )
         phase_results = orchestrator._build_phase_results_with_policy(
             step_results,
-            [phase_policy_from_dict(item) for item in session.get("phase_policies", [])],
+            [
+                phase_policy_from_dict(item)
+                for item in session.get("phase_policies", [])
+            ],
         )
-        verification_outcomes = [step.details for step in step_results if step.step_type == StepType.VERIFICATION and step.details]
+        verification_outcomes = [
+            step.details
+            for step in step_results
+            if step.step_type == StepType.VERIFICATION and step.details
+        ]
         context_package = orchestrator.context_builder.build(
             task=session["request"]["task"],
             mode=mode,
@@ -1659,7 +2035,10 @@ class AxiomRunManager:
             project_memory=project_memory,
             repo_index_summary=repo_index_summary,
             plan=plan,
-            phase_policies=[phase_policy_from_dict(item) for item in session.get("phase_policies", [])],
+            phase_policies=[
+                phase_policy_from_dict(item)
+                for item in session.get("phase_policies", [])
+            ],
             change_preview=change_preview,
             llm_summary=llm_summary,
             llm_review_summary=llm_review_summary,
@@ -1667,7 +2046,11 @@ class AxiomRunManager:
             verification_outcomes=verification_outcomes,
             artifact_references=artifact_references,
         )
-        snapshot_reference = SnapshotReference(**session["snapshot_reference"]) if session["snapshot_reference"] else None
+        snapshot_reference = (
+            SnapshotReference(**session["snapshot_reference"])
+            if session["snapshot_reference"]
+            else None
+        )
         result = orchestrator._build_result(
             mode=mode,
             permissions=permissions,
@@ -1681,7 +2064,10 @@ class AxiomRunManager:
             llm_summary=llm_summary,
             llm_review_summary=llm_review_summary,
             plan=plan,
-            phase_policies=[phase_policy_from_dict(item) for item in session.get("phase_policies", [])],
+            phase_policies=[
+                phase_policy_from_dict(item)
+                for item in session.get("phase_policies", [])
+            ],
             context_package=context_package,
             workspace=workspace,
             terminal=terminal,
@@ -1694,39 +2080,83 @@ class AxiomRunManager:
             final_execution_result=final_execution_result,
             snapshot_reference=snapshot_reference,
         )
-        orchestrator._attach_result_artifact(artifact_manager, artifact_references, result)
+        orchestrator._attach_result_artifact(
+            artifact_manager, artifact_references, result
+        )
         session["result"] = result.to_dict()
         session["context_package"] = context_package.to_dict()
-        session["artifact_references"] = [artifact.to_dict() for artifact in result.artifact_references]
+        session["artifact_references"] = [
+            artifact.to_dict() for artifact in result.artifact_references
+        ]
         session["phase_results"] = [phase.to_dict() for phase in result.phase_results]
         session["step_results"] = [step.to_dict() for step in result.step_results]
         session["files_read"] = list(result.files_read)
         session["files_modified"] = list(result.files_modified)
-        session["blocked_actions"] = [action.to_dict() for action in result.blocked_actions]
+        session["blocked_actions"] = [
+            action.to_dict() for action in result.blocked_actions
+        ]
         session["commands_run"] = [command.to_dict() for command in result.commands_run]
-        session["initial_execution_result"] = result.initial_execution_result.to_dict() if result.initial_execution_result else None
+        session["initial_execution_result"] = (
+            result.initial_execution_result.to_dict()
+            if result.initial_execution_result
+            else None
+        )
         session["final_execution_result"] = result.final_execution_result.to_dict()
-        session["failure_classification"] = result.failure_classification.to_dict() if result.failure_classification else None
-        session["repair_summary"] = result.repair_summary.to_dict() if result.repair_summary else None
-        session["status"] = RunStatus.COMPLETED.value if result.final_execution_result.success else RunStatus.FAILED.value
+        session["failure_classification"] = (
+            result.failure_classification.to_dict()
+            if result.failure_classification
+            else None
+        )
+        session["repair_summary"] = (
+            result.repair_summary.to_dict() if result.repair_summary else None
+        )
+        session["status"] = (
+            RunStatus.COMPLETED.value
+            if result.final_execution_result.success
+            else RunStatus.FAILED.value
+        )
         session["pending_phase"] = None
         session["activity"].append(
-            "Execution completed successfully." if result.final_execution_result.success else "Execution ended with a failure summary."
+            "Execution completed successfully."
+            if result.final_execution_result.success
+            else "Execution ended with a failure summary."
         )
         self._persist_session(session)
 
     def _build_success_execution_result(self, session: dict) -> ExecutionResult:
         interpretation = interpretation_from_dict(session["task_interpretation"])
         verification_outcome = None
-        verification_steps = [item for item in session["step_results"] if item["step_type"] == StepType.VERIFICATION.value and item.get("details")]
+        verification_steps = [
+            item
+            for item in session["step_results"]
+            if item["step_type"] == StepType.VERIFICATION.value and item.get("details")
+        ]
         if verification_steps:
             verification_outcome = verification_steps[-1]["details"]
         if interpretation.action == TaskAction.CREATE_FILE:
-            return ExecutionResult(success=True, message=f"Created '{interpretation.target_path}'.", details=verification_outcome or {})
+            return ExecutionResult(
+                success=True,
+                message=f"Created '{interpretation.target_path}'.",
+                details=verification_outcome or {},
+            )
         if interpretation.action == TaskAction.MODIFY_FILE:
-            return ExecutionResult(success=True, message=f"Modified '{interpretation.target_path}'.", details=verification_outcome or {})
+            return ExecutionResult(
+                success=True,
+                message=f"Modified '{interpretation.target_path}'.",
+                details=verification_outcome or {},
+            )
         if interpretation.action == TaskAction.RUN_COMMAND:
-            return ExecutionResult(success=True, message="Command executed.", details=verification_outcome or (session["last_command_result"] or {}))
+            return ExecutionResult(
+                success=True,
+                message="Command executed.",
+                details=verification_outcome or (session["last_command_result"] or {}),
+            )
         restored = session.get("last_restore_reference") or {}
-        snapshot_id = restored.get("snapshot_id", interpretation.snapshot_id or "latest")
-        return ExecutionResult(success=True, message=f"Restored snapshot '{snapshot_id}'.", details=verification_outcome or restored)
+        snapshot_id = restored.get(
+            "snapshot_id", interpretation.snapshot_id or "latest"
+        )
+        return ExecutionResult(
+            success=True,
+            message=f"Restored snapshot '{snapshot_id}'.",
+            details=verification_outcome or restored,
+        )

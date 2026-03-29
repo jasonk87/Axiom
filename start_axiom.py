@@ -14,7 +14,6 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parent
 UI_DIR = ROOT / "ui"
 DIST_DIR = UI_DIR / "dist"
@@ -39,7 +38,9 @@ def port_in_use(host: str, port: int) -> bool:
         return candidate.connect_ex((host, port)) == 0
 
 
-def wait_for_http(url: str, timeout_seconds: float, process: subprocess.Popen[str] | None = None) -> None:
+def wait_for_http(
+    url: str, timeout_seconds: float, process: subprocess.Popen[str] | None = None
+) -> None:
     deadline = time.time() + timeout_seconds
     last_error: Exception | None = None
     while time.time() < deadline:
@@ -55,7 +56,9 @@ def wait_for_http(url: str, timeout_seconds: float, process: subprocess.Popen[st
     raise LauncherError(f"Timed out waiting for {url}. Last error: {last_error}")
 
 
-def stream_output(process: subprocess.Popen[str], prefix: str) -> threading.Thread | None:
+def stream_output(
+    process: subprocess.Popen[str], prefix: str
+) -> threading.Thread | None:
     if process.stdout is None:
         return None
 
@@ -79,7 +82,11 @@ def register_process(process: subprocess.Popen[str], name: str) -> None:
 
 def unregister_process(process: subprocess.Popen[str]) -> None:
     with ACTIVE_PROCESSES_LOCK:
-        ACTIVE_PROCESSES[:] = [(candidate, name) for candidate, name in ACTIVE_PROCESSES if candidate != process]
+        ACTIVE_PROCESSES[:] = [
+            (candidate, name)
+            for candidate, name in ACTIVE_PROCESSES
+            if candidate != process
+        ]
 
 
 def npm_command() -> list[str]:
@@ -88,7 +95,9 @@ def npm_command() -> list[str]:
     else:
         command = shutil.which("npm")
     if not command:
-        raise LauncherError("npm was not found. Install Node.js and npm before launching Axiom UI.")
+        raise LauncherError(
+            "npm was not found. Install Node.js and npm before launching Axiom UI."
+        )
     return [command]
 
 
@@ -111,7 +120,9 @@ def popen_kwargs() -> dict:
         "bufsize": 1,
     }
     if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+        kwargs["creationflags"] = getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
+        )
     return kwargs
 
 
@@ -182,7 +193,8 @@ def start_frontend(host: str, port: int, backend_port: int) -> subprocess.Popen[
     env["BROWSER"] = "none"
     env["AXIOM_BACKEND_URL"] = f"http://{DEFAULT_BACKEND_HOST}:{backend_port}"
     process = subprocess.Popen(
-        npm_command() + ["run", "dev", "--", "--host", host, "--port", str(port), "--strictPort"],
+        npm_command()
+        + ["run", "dev", "--", "--host", host, "--port", str(port), "--strictPort"],
         cwd=str(UI_DIR),
         env=env,
         **popen_kwargs(),
@@ -192,19 +204,27 @@ def start_frontend(host: str, port: int, backend_port: int) -> subprocess.Popen[
     return process
 
 
-def run_dev(host: str, backend_port: int, frontend_port: int, open_browser: bool) -> int:
+def run_dev(
+    host: str, backend_port: int, frontend_port: int, open_browser: bool
+) -> int:
     check_ui_dependencies()
     backend = None
     frontend = None
     try:
         print("[launcher] Starting Axiom backend bridge...")
         backend = start_backend(host, backend_port)
-        wait_for_http(f"http://{host}:{backend_port}/api/health", timeout_seconds=20, process=backend)
+        wait_for_http(
+            f"http://{host}:{backend_port}/api/health",
+            timeout_seconds=20,
+            process=backend,
+        )
         print("[launcher] Backend is ready.")
 
         print("[launcher] Starting Vite frontend...")
         frontend = start_frontend(host, frontend_port, backend_port)
-        wait_for_http(f"http://{host}:{frontend_port}", timeout_seconds=30, process=frontend)
+        wait_for_http(
+            f"http://{host}:{frontend_port}", timeout_seconds=30, process=frontend
+        )
         print("[launcher] Frontend is ready.")
 
         launch_url = f"http://{host}:{frontend_port}"
@@ -230,12 +250,16 @@ def run_dev(host: str, backend_port: int, frontend_port: int, open_browser: bool
 
 def run_built(host: str, backend_port: int, open_browser: bool) -> int:
     if not DIST_DIR.exists():
-        raise LauncherError("Built frontend assets were not found in ui/dist. Run 'cd ui && npm run build' first.")
+        raise LauncherError(
+            "Built frontend assets were not found in ui/dist. Run 'cd ui && npm run build' first."
+        )
     backend = None
     try:
         print("[launcher] Starting Axiom backend with built UI assets...")
         backend = start_backend(host, backend_port)
-        wait_for_http(f"http://{host}:{backend_port}", timeout_seconds=20, process=backend)
+        wait_for_http(
+            f"http://{host}:{backend_port}", timeout_seconds=20, process=backend
+        )
         launch_url = f"http://{host}:{backend_port}"
         print(f"[launcher] Axiom built UI is running at {launch_url}")
         if open_browser:
@@ -256,7 +280,9 @@ def run_built(host: str, backend_port: int, open_browser: bool) -> int:
 
 def main() -> int:
     install_signal_handlers()
-    parser = argparse.ArgumentParser(description="Start the Axiom local UI with one command.")
+    parser = argparse.ArgumentParser(
+        description="Start the Axiom local UI with one command."
+    )
     parser.add_argument("--mode", choices=["dev", "built"], default="dev")
     parser.add_argument("--host", default=DEFAULT_BACKEND_HOST)
     parser.add_argument("--backend-port", type=int, default=DEFAULT_BACKEND_PORT)
@@ -266,7 +292,12 @@ def main() -> int:
 
     try:
         if args.mode == "dev":
-            return run_dev(args.host, args.backend_port, args.frontend_port, open_browser=not args.no_browser)
+            return run_dev(
+                args.host,
+                args.backend_port,
+                args.frontend_port,
+                open_browser=not args.no_browser,
+            )
         return run_built(args.host, args.backend_port, open_browser=not args.no_browser)
     except LauncherError as error:
         print(f"[launcher] {error}")

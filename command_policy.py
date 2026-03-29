@@ -24,9 +24,21 @@ class CommandPolicy:
             "destructive_remove_powershell",
             re.compile(r"\bRemove-Item\b.*\b-Recurse\b.*\b-Force\b", re.IGNORECASE),
         ),
-        ("destructive_remove_cmd", re.compile(r"\b(?:del|erase|rd|rmdir)\b.*\b(?:/s|/q)\b", re.IGNORECASE)),
-        ("broad_permission_change", re.compile(r"\b(?:chmod|chown|icacls)\b", re.IGNORECASE)),
-        ("system_shutdown", re.compile(r"\b(?:shutdown|reboot|halt|poweroff|Restart-Computer|Stop-Computer)\b", re.IGNORECASE)),
+        (
+            "destructive_remove_cmd",
+            re.compile(r"\b(?:del|erase|rd|rmdir)\b.*\b(?:/s|/q)\b", re.IGNORECASE),
+        ),
+        (
+            "broad_permission_change",
+            re.compile(r"\b(?:chmod|chown|icacls)\b", re.IGNORECASE),
+        ),
+        (
+            "system_shutdown",
+            re.compile(
+                r"\b(?:shutdown|reboot|halt|poweroff|Restart-Computer|Stop-Computer)\b",
+                re.IGNORECASE,
+            ),
+        ),
     ]
 
     def __init__(self, mode: CommandPolicyMode) -> None:
@@ -34,7 +46,9 @@ class CommandPolicy:
 
     def evaluate(self, command: str) -> CommandPolicyDecision:
         if self.mode == CommandPolicyMode.PERMISSIVE:
-            return CommandPolicyDecision(allowed=True, reason="Permissive policy allows command execution.")
+            return CommandPolicyDecision(
+                allowed=True, reason="Permissive policy allows command execution."
+            )
 
         for rule_name, pattern in self.SAFE_RULES:
             if pattern.search(command):
@@ -44,4 +58,6 @@ class CommandPolicy:
                     matched_rule=rule_name,
                 )
 
-        return CommandPolicyDecision(allowed=True, reason="Safe policy allowed the command.")
+        return CommandPolicyDecision(
+            allowed=True, reason="Safe policy allowed the command."
+        )

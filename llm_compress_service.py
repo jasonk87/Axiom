@@ -13,6 +13,7 @@ from models import (
     TaskInterpretation,
 )
 
+
 class LocalLLMCompressService:
     def __init__(self, settings: LLMSettings | None = None, provider=None) -> None:
         self.settings = settings or LLMSettings.from_env()
@@ -31,12 +32,14 @@ class LocalLLMCompressService:
         if not self.enabled():
             return None, None
 
-        engine = StructuredOutputRetryEngine(self.settings, artifact_manager, provider=self.provider)
+        engine = StructuredOutputRetryEngine(
+            self.settings, artifact_manager, provider=self.provider
+        )
         fallback_message = "Axiom failed to compress the subtask history."
         system_instruction = (
             "You are summarizing the progress of a complex coding task.\n"
             "Return only JSON.\n"
-            "The top-level object must be {\"summary\": \"...\"}.\n"
+            'The top-level object must be {"summary": "..."}.\n'
             "Combine the existing history (if any) with the newly completed subtasks into a single, dense paragraph.\n"
             "Focus on what was actually accomplished, files modified, and critical outcomes."
         )

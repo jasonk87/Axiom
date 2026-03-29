@@ -118,7 +118,9 @@ class ProjectRootTests(unittest.TestCase):
             self.assertEqual(session["project_root"], str(project_root.resolve()))
             self.assertEqual(session["session_id"], session["id"])
             self.assertTrue(session["run_id"])
-            self.assertEqual(session["result"]["effective_scope"]["paths"], ["demo.txt"])
+            self.assertEqual(
+                session["result"]["effective_scope"]["paths"], ["demo.txt"]
+            )
 
     def test_prepare_run_requires_project(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -154,7 +156,9 @@ class ProjectRootTests(unittest.TestCase):
             self.assertEqual(detail["memory"]["project_id"], project["id"])
             memory_path = state_root / "memory.json"
             payload = json.loads(memory_path.read_text(encoding="utf-8"))
-            self.assertEqual(payload["global_memory"]["model_preference"]["model"], "llama3.2:1b")
+            self.assertEqual(
+                payload["global_memory"]["model_preference"]["model"], "llama3.2:1b"
+            )
             self.assertIn(project["id"], payload["project_memories"])
 
 

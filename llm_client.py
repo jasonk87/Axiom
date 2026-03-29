@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 from urllib import error, request
 
-
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2:3b"
 
@@ -38,7 +37,9 @@ class LLMSettings:
         enabled = enabled_raw in {"1", "true", "yes", "on"}
         review_raw = os.getenv("AXIOM_LLM_REVIEW_ENABLED", "true").strip().lower()
         review_enabled = review_raw in {"1", "true", "yes", "on"}
-        compression_raw = os.getenv("AXIOM_LLM_COMPRESSION_ENABLED", "true").strip().lower()
+        compression_raw = (
+            os.getenv("AXIOM_LLM_COMPRESSION_ENABLED", "true").strip().lower()
+        )
         compression_enabled = compression_raw in {"1", "true", "yes", "on"}
         return cls(
             enabled=enabled,
@@ -50,8 +51,12 @@ class LLMSettings:
             retry_limit=max(0, int(os.getenv("AXIOM_LLM_RETRY_LIMIT", "2"))),
             temperature=float(os.getenv("AXIOM_LLM_TEMPERATURE", "0.1")),
             compression_enabled=compression_enabled,
-            compression_threshold=max(1, int(os.getenv("AXIOM_LLM_COMPRESSION_THRESHOLD", "5"))),
-            embedding_model=os.getenv("AXIOM_LLM_EMBEDDING_MODEL", "nomic-embed-text").strip(),
+            compression_threshold=max(
+                1, int(os.getenv("AXIOM_LLM_COMPRESSION_THRESHOLD", "5"))
+            ),
+            embedding_model=os.getenv(
+                "AXIOM_LLM_EMBEDDING_MODEL", "nomic-embed-text"
+            ).strip(),
         )
 
     @classmethod
@@ -63,12 +68,23 @@ class LLMSettings:
             provider=str(payload.get("provider", defaults.provider)).strip().lower(),
             base_url=str(payload.get("base_url", defaults.base_url)).strip(),
             model=str(payload.get("model", defaults.model)).strip(),
-            timeout_seconds=max(1, int(payload.get("timeout_seconds", defaults.timeout_seconds))),
+            timeout_seconds=max(
+                1, int(payload.get("timeout_seconds", defaults.timeout_seconds))
+            ),
             retry_limit=max(0, int(payload.get("retry_limit", defaults.retry_limit))),
             temperature=float(payload.get("temperature", defaults.temperature)),
-            compression_enabled=bool(payload.get("compression_enabled", defaults.compression_enabled)),
-            compression_threshold=max(1, int(payload.get("compression_threshold", defaults.compression_threshold))),
-            embedding_model=str(payload.get("embedding_model", defaults.embedding_model)).strip(),
+            compression_enabled=bool(
+                payload.get("compression_enabled", defaults.compression_enabled)
+            ),
+            compression_threshold=max(
+                1,
+                int(
+                    payload.get("compression_threshold", defaults.compression_threshold)
+                ),
+            ),
+            embedding_model=str(
+                payload.get("embedding_model", defaults.embedding_model)
+            ).strip(),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -123,18 +139,29 @@ class OllamaProvider:
         )
 
         try:
-            with request.urlopen(http_request, timeout=self.settings.timeout_seconds) as response:
+            with request.urlopen(
+                http_request, timeout=self.settings.timeout_seconds
+            ) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except error.HTTPError as caught:
-            raise LLMProviderError("ollama_http_error", f"Ollama returned HTTP {caught.code}.") from caught
+            raise LLMProviderError(
+                "ollama_http_error", f"Ollama returned HTTP {caught.code}."
+            ) from caught
         except error.URLError as caught:
-            raise LLMProviderError("provider_unavailable", f"Ollama is unavailable at {self.settings.base_url}.") from caught
+            raise LLMProviderError(
+                "provider_unavailable",
+                f"Ollama is unavailable at {self.settings.base_url}.",
+            ) from caught
         except TimeoutError as caught:
-            raise LLMProviderError("timeout", "Timed out waiting for the local model response.") from caught
+            raise LLMProviderError(
+                "timeout", "Timed out waiting for the local model response."
+            ) from caught
 
         text = str(data.get("response", "")).strip()
         if not text:
-            raise LLMProviderError("empty_response", "The local model returned an empty response.")
+            raise LLMProviderError(
+                "empty_response", "The local model returned an empty response."
+            )
 
         return LLMResponse(
             raw_text=text,
@@ -163,23 +190,38 @@ class OllamaProvider:
         )
 
         try:
-            with request.urlopen(http_request, timeout=self.settings.timeout_seconds) as response:
+            with request.urlopen(
+                http_request, timeout=self.settings.timeout_seconds
+            ) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except error.HTTPError as caught:
-            raise LLMProviderError("ollama_http_error", f"Ollama returned HTTP {caught.code} during embedding.") from caught
+            raise LLMProviderError(
+                "ollama_http_error",
+                f"Ollama returned HTTP {caught.code} during embedding.",
+            ) from caught
         except error.URLError as caught:
-            raise LLMProviderError("provider_unavailable", f"Ollama is unavailable at {self.settings.base_url}.") from caught
+            raise LLMProviderError(
+                "provider_unavailable",
+                f"Ollama is unavailable at {self.settings.base_url}.",
+            ) from caught
         except TimeoutError as caught:
-            raise LLMProviderError("timeout", "Timed out waiting for the local model embedding response.") from caught
+            raise LLMProviderError(
+                "timeout", "Timed out waiting for the local model embedding response."
+            ) from caught
 
         embedding = data.get("embedding")
         if not isinstance(embedding, list) or not embedding:
-            raise LLMProviderError("invalid_embedding", "The local model returned an invalid embedding response.")
+            raise LLMProviderError(
+                "invalid_embedding",
+                "The local model returned an invalid embedding response.",
+            )
 
         return embedding
 
 
 def build_provider(settings: LLMSettings):
     if settings.provider != "ollama":
-        raise LLMProviderError("unsupported_provider", f"Unsupported local provider '{settings.provider}'.")
+        raise LLMProviderError(
+            "unsupported_provider", f"Unsupported local provider '{settings.provider}'."
+        )
     return OllamaProvider(settings)

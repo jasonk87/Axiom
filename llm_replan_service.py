@@ -39,12 +39,14 @@ class LocalLLMReplanService:
         if not self.settings.enabled:
             return None, None
 
-        engine = StructuredOutputRetryEngine(self.settings, artifact_manager, provider=self.provider)
+        engine = StructuredOutputRetryEngine(
+            self.settings, artifact_manager, provider=self.provider
+        )
         fallback_message = "Axiom failed to replan the remaining work."
         system_instruction = (
             "You are evaluating the progress of a complex coding request for a local model.\n"
             "Return only JSON.\n"
-            "The top-level object must be {\"is_complete\": bool, \"reasoning\": \"...\", \"new_subtasks\": [...]}.\n"
+            'The top-level object must be {"is_complete": bool, "reasoning": "...", "new_subtasks": [...]}.\n'
             "If the original task goal is fully accomplished, set is_complete to true and new_subtasks to an empty list.\n"
             "If more work is needed, set is_complete to false, and provide the next necessary subtasks.\n"
             "Each subtask must contain exactly these keys: action, description, target_path, command, dependencies.\n"
@@ -58,7 +60,10 @@ class LocalLLMReplanService:
                 "raw_task": interpretation.raw_task,
             },
             "compressed_history": interpretation.compressed_history,
-            "recent_completed_subtasks": [st.to_dict() for st in completed_subtasks[interpretation.compressed_subtask_count:]],
+            "recent_completed_subtasks": [
+                st.to_dict()
+                for st in completed_subtasks[interpretation.compressed_subtask_count :]
+            ],
             "workspace": {
                 "scope": scope_manager.describe_effective_scope(),
                 "protected_paths": scope_manager.protected_path_labels(),
@@ -68,7 +73,11 @@ class LocalLLMReplanService:
                 if project_memory
                 else {"summary": "", "known_commands": [], "recent_context": ""}
             ),
-            "repo_index_summary": repo_index_summary.to_dict() if repo_index_summary else {"generated": False},
+            "repo_index_summary": (
+                repo_index_summary.to_dict()
+                if repo_index_summary
+                else {"generated": False}
+            ),
             "instruction": "Evaluate if the overall task is complete based on the subtask results. If not, generate the next subtasks.",
         }
         context_artifact = artifact_manager.save_json(

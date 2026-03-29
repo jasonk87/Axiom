@@ -8,7 +8,13 @@ from llm_client import LLMResponse, LLMSettings
 from llm_decompose_service import LocalLLMDecomposeService
 from llm_implement_service import LocalLLMImplementService
 from llm_replan_service import LocalLLMReplanService
-from models import SubTask, TaskAction, TaskInterpretation, VerificationConfig, VerificationProfile
+from models import (
+    SubTask,
+    TaskAction,
+    TaskInterpretation,
+    VerificationConfig,
+    VerificationProfile,
+)
 from scope_manager import ScopeManager
 
 
@@ -137,7 +143,9 @@ class LLMServiceTests(unittest.TestCase):
             action=TaskAction.COMPLEX,
         )
         completed_subtasks = [
-            SubTask(action="create_file", description="Done step", result_summary="Success")
+            SubTask(
+                action="create_file", description="Done step", result_summary="Success"
+            )
         ]
 
         payload, summary = service.generate_replan(
@@ -158,6 +166,7 @@ class LLMServiceTests(unittest.TestCase):
         self.assertIsNotNone(summary)
         assert summary is not None
         self.assertTrue(summary.accepted)
+
 
 if __name__ == "__main__":
     unittest.main()

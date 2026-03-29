@@ -29,9 +29,13 @@ class PreviewProvenanceTests(unittest.TestCase):
         self.project_root = Path(self.temp_dir.name)
         self.permissions = PermissionSet(True, True, True)
         self.scope_manager = ScopeManager(str(self.project_root), ["."], [])
-        self.workspace = WorkspaceManager(str(self.project_root), self.permissions, self.scope_manager)
+        self.workspace = WorkspaceManager(
+            str(self.project_root), self.permissions, self.scope_manager
+        )
         self.artifact_manager = ArtifactManager(str(self.project_root))
-        self.preview_manager = PreviewManager(self.workspace, self.scope_manager, self.artifact_manager)
+        self.preview_manager = PreviewManager(
+            self.workspace, self.scope_manager, self.artifact_manager
+        )
         self.snapshots = SnapshotManager(str(self.project_root))
 
     def tearDown(self) -> None:
@@ -108,7 +112,12 @@ class PreviewProvenanceTests(unittest.TestCase):
         self.assertEqual(len(preview.file_changes), 2)
         self.assertEqual(preview.file_changes[0].before_preview, "A0")
         self.assertEqual(preview.file_changes[1].before_preview, "B0")
-        self.assertTrue(all(change.origin["snapshot_id"] == snapshot.snapshot_id for change in preview.file_changes))
+        self.assertTrue(
+            all(
+                change.origin["snapshot_id"] == snapshot.snapshot_id
+                for change in preview.file_changes
+            )
+        )
 
     def test_phased_run_preview_is_frozen_before_approvals(self) -> None:
         (self.project_root / "phase.txt").write_text("PHASE BASELINE", encoding="utf-8")
@@ -129,17 +138,22 @@ class PreviewProvenanceTests(unittest.TestCase):
                 "protectedPaths": [],
             }
         )
-        (self.project_root / "phase.txt").write_text("MUTATED BEFORE APPROVAL", encoding="utf-8")
+        (self.project_root / "phase.txt").write_text(
+            "MUTATED BEFORE APPROVAL", encoding="utf-8"
+        )
 
         preview = session["change_preview"]["file_changes"][0]
         self.assertEqual(preview["before_preview"], "PHASE BASELINE")
         self.assertEqual(session["status"], "awaiting_plan_approval")
 
+
 class OrchestratorRollbackPreviewTest(unittest.TestCase):
     def test_failed_run_followed_by_rollback_restores_snapshot_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_root = Path(temp_dir)
-            (project_root / "rollback.txt").write_text("ROLLBACK BASELINE", encoding="utf-8")
+            (project_root / "rollback.txt").write_text(
+                "ROLLBACK BASELINE", encoding="utf-8"
+            )
             orchestrator = Orchestrator(str(project_root))
 
             import builtins
@@ -168,10 +182,18 @@ class OrchestratorRollbackPreviewTest(unittest.TestCase):
             self.assertFalse(result.final_execution_result.success)
             self.assertIsNotNone(result.change_preview)
             assert result.change_preview is not None
-            self.assertEqual(result.change_preview.file_changes[0].before_preview, "ROLLBACK BASELINE")
+            self.assertEqual(
+                result.change_preview.file_changes[0].before_preview,
+                "ROLLBACK BASELINE",
+            )
             assert result.snapshot_reference is not None
-            SnapshotManager(str(project_root)).restore_snapshot(result.snapshot_reference.snapshot_id)
-            self.assertEqual((project_root / "rollback.txt").read_text(encoding="utf-8"), "ROLLBACK BASELINE")
+            SnapshotManager(str(project_root)).restore_snapshot(
+                result.snapshot_reference.snapshot_id
+            )
+            self.assertEqual(
+                (project_root / "rollback.txt").read_text(encoding="utf-8"),
+                "ROLLBACK BASELINE",
+            )
 
 
 if __name__ == "__main__":

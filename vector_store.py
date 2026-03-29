@@ -33,7 +33,12 @@ class LocalVectorStore:
             self.file_hashes = {}
 
     def _save_index(self) -> None:
-        self.index_file.write_text(json.dumps({"documents": self.documents, "file_hashes": self.file_hashes}, indent=2), encoding="utf-8")
+        self.index_file.write_text(
+            json.dumps(
+                {"documents": self.documents, "file_hashes": self.file_hashes}, indent=2
+            ),
+            encoding="utf-8",
+        )
 
     def _chunk_text(self, text: str, max_chunk_size: int = 1500) -> list[str]:
         # Very simple chunking by paragraphs, keeping chunks under max_chunk_size
@@ -64,6 +69,7 @@ class LocalVectorStore:
     def add_document(self, file_path: str, content: str) -> None:
         """Embed and store a document in chunks. Replaces existing chunks for the file."""
         import hashlib
+
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
         # Skip if file content hasn't changed
@@ -80,12 +86,14 @@ class LocalVectorStore:
                 continue
             try:
                 embedding = self.provider.embed(chunk)
-                self.documents.append({
-                    "path": file_path,
-                    "chunk_index": i,
-                    "content": chunk,
-                    "embedding": embedding
-                })
+                self.documents.append(
+                    {
+                        "path": file_path,
+                        "chunk_index": i,
+                        "content": chunk,
+                        "embedding": embedding,
+                    }
+                )
             except LLMProviderError as e:
                 # If we fail to embed one chunk, log/print it and continue or break
                 print(f"[VectorStore] Failed to embed chunk {i} of {file_path}: {e}")
@@ -108,11 +116,13 @@ class LocalVectorStore:
         results = []
         for doc in self.documents:
             similarity = self._cosine_similarity(query_embedding, doc["embedding"])
-            results.append({
-                "path": doc["path"],
-                "content": doc["content"],
-                "similarity": similarity
-            })
+            results.append(
+                {
+                    "path": doc["path"],
+                    "content": doc["content"],
+                    "similarity": similarity,
+                }
+            )
 
         # Sort by similarity descending
         results.sort(key=lambda x: x["similarity"], reverse=True)

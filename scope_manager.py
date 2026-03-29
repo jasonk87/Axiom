@@ -90,7 +90,9 @@ class ScopeManager:
                 ),
             )
         if self.scope_paths:
-            labels = ", ".join(self._relative_display(path) for path in self.scope_paths)
+            labels = ", ".join(
+                self._relative_display(path) for path in self.scope_paths
+            )
             raise ScopeViolationError(
                 action=action,
                 path=".",
@@ -107,7 +109,10 @@ class ScopeManager:
             if not entry:
                 continue
             candidate = (self.project_root / entry).resolve()
-            if self.project_root not in candidate.parents and candidate != self.project_root:
+            if (
+                self.project_root not in candidate.parents
+                and candidate != self.project_root
+            ):
                 raise ValueError(f"Path '{entry}' escapes the project workspace.")
             normalized.append(candidate)
         return normalized

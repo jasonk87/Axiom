@@ -37,12 +37,14 @@ class LocalLLMDecomposeService:
         if not self.settings.enabled:
             return None, None
 
-        engine = StructuredOutputRetryEngine(self.settings, artifact_manager, provider=self.provider)
+        engine = StructuredOutputRetryEngine(
+            self.settings, artifact_manager, provider=self.provider
+        )
         fallback_message = "Axiom failed to decompose the task into subtasks."
         system_instruction = (
             "You are breaking down a complex coding request into smaller, manageable subtasks for a local model.\n"
             "Return only JSON.\n"
-            "The top-level object must be {\"subtasks\": [...]}.\n"
+            'The top-level object must be {"subtasks": [...]}.\n'
             "Each subtask must contain exactly these keys: action, description, target_path, command, dependencies.\n"
             "Action must be one of: create_file, modify_file, run_command, analyze, restore_snapshot, unknown.\n"
             "If target_path or command are not applicable, set them to null.\n"
@@ -62,7 +64,11 @@ class LocalLLMDecomposeService:
                 if project_memory
                 else {"summary": "", "known_commands": [], "recent_context": ""}
             ),
-            "repo_index_summary": repo_index_summary.to_dict() if repo_index_summary else {"generated": False},
+            "repo_index_summary": (
+                repo_index_summary.to_dict()
+                if repo_index_summary
+                else {"generated": False}
+            ),
             "instruction": "Decompose the complex request into a series of explicit steps. Be atomic. Do not leave any ambiguous tasks.",
         }
         context_artifact = artifact_manager.save_json(
@@ -99,7 +105,8 @@ class LocalLLMDecomposeService:
                 description=st["description"],
                 target_path=st.get("target_path"),
                 command=st.get("command"),
-                dependencies=st.get("dependencies", [])
-            ) for st in result.payload["subtasks"]
+                dependencies=st.get("dependencies", []),
+            )
+            for st in result.payload["subtasks"]
         ]
         return subtasks, result.summary

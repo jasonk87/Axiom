@@ -33,14 +33,20 @@ class PermissionManager:
     @staticmethod
     def require_read(permissions: PermissionSet) -> None:
         if not permissions.can_read_files:
-            raise PermissionDeniedError("File reads are not allowed in the current mode.")
+            raise PermissionDeniedError(
+                "File reads are not allowed in the current mode."
+            )
 
     @staticmethod
     def require_write(permissions: PermissionSet) -> None:
         if not permissions.can_write_files:
-            raise PermissionDeniedError("File writes are not allowed in the current mode.")
+            raise PermissionDeniedError(
+                "File writes are not allowed in the current mode."
+            )
 
     @staticmethod
     def require_command(permissions: PermissionSet) -> None:
         if not permissions.can_run_commands:
-            raise PermissionDeniedError("Command execution is not allowed in the current mode.")
+            raise PermissionDeniedError(
+                "Command execution is not allowed in the current mode."
+            )

@@ -98,10 +98,14 @@ class Planner:
                     id="step-3",
                     step_type=StepType.VERIFICATION,
                     title="Verify File Outcome",
-                    description=self._verification_description(verification_config, TaskAction.CREATE_FILE),
+                    description=self._verification_description(
+                        verification_config, TaskAction.CREATE_FILE
+                    ),
                     dependencies=["step-2"],
                     scope_hint=scope_manager.target_scope_hint(target),
-                    expected_outcome=self._verification_outcome(verification_config, TaskAction.CREATE_FILE),
+                    expected_outcome=self._verification_outcome(
+                        verification_config, TaskAction.CREATE_FILE
+                    ),
                     phase="verify",
                     risk_hint="low",
                     approval_hint="included_in_current_phase",
@@ -151,10 +155,14 @@ class Planner:
                     id="step-3",
                     step_type=StepType.VERIFICATION,
                     title="Verify Command Outcome",
-                    description=self._verification_description(verification_config, TaskAction.RUN_COMMAND),
+                    description=self._verification_description(
+                        verification_config, TaskAction.RUN_COMMAND
+                    ),
                     dependencies=["step-2"],
                     scope_hint=scope_manager.target_scope_hint(None),
-                    expected_outcome=self._verification_outcome(verification_config, TaskAction.RUN_COMMAND),
+                    expected_outcome=self._verification_outcome(
+                        verification_config, TaskAction.RUN_COMMAND
+                    ),
                     phase="verify",
                     risk_hint="low",
                     approval_hint="included_in_current_phase",
@@ -204,10 +212,14 @@ class Planner:
                     id="step-3",
                     step_type=StepType.VERIFICATION,
                     title="Verify Overwrite Outcome",
-                    description=self._verification_description(verification_config, TaskAction.MODIFY_FILE),
+                    description=self._verification_description(
+                        verification_config, TaskAction.MODIFY_FILE
+                    ),
                     dependencies=["step-2"],
                     scope_hint=scope_manager.target_scope_hint(target),
-                    expected_outcome=self._verification_outcome(verification_config, TaskAction.MODIFY_FILE),
+                    expected_outcome=self._verification_outcome(
+                        verification_config, TaskAction.MODIFY_FILE
+                    ),
                     phase="verify",
                     risk_hint="low",
                     approval_hint="included_in_current_phase",
@@ -257,10 +269,14 @@ class Planner:
                     id="step-3",
                     step_type=StepType.VERIFICATION,
                     title="Verify Restore Outcome",
-                    description=self._verification_description(verification_config, TaskAction.RESTORE_SNAPSHOT),
+                    description=self._verification_description(
+                        verification_config, TaskAction.RESTORE_SNAPSHOT
+                    ),
                     dependencies=["step-2"],
                     scope_hint="whole project",
-                    expected_outcome=self._verification_outcome(verification_config, TaskAction.RESTORE_SNAPSHOT),
+                    expected_outcome=self._verification_outcome(
+                        verification_config, TaskAction.RESTORE_SNAPSHOT
+                    ),
                     phase="verify",
                     risk_hint="medium",
                     approval_hint="included_in_current_phase",
@@ -337,7 +353,9 @@ class Planner:
         return "Each verification command result is captured structurally, including failures."
 
     @staticmethod
-    def _repo_note_for_target(target: str, repo_index_summary: RepoIndexSummary | None) -> str:
+    def _repo_note_for_target(
+        target: str, repo_index_summary: RepoIndexSummary | None
+    ) -> str:
         if repo_index_summary is None or not repo_index_summary.generated:
             return ""
         directory = target.split("/")[0] if "/" in target else "."
@@ -356,11 +374,20 @@ class Planner:
             return ""
         hints: list[str] = []
         if repo_index_summary.likely_entry_files:
-            hints.append("likely entry files include " + ", ".join(repo_index_summary.likely_entry_files[:3]))
+            hints.append(
+                "likely entry files include "
+                + ", ".join(repo_index_summary.likely_entry_files[:3])
+            )
         if repo_index_summary.likely_config_files:
-            hints.append("likely config files include " + ", ".join(repo_index_summary.likely_config_files[:3]))
+            hints.append(
+                "likely config files include "
+                + ", ".join(repo_index_summary.likely_config_files[:3])
+            )
         if repo_index_summary.likely_test_files:
-            hints.append("likely test files include " + ", ".join(repo_index_summary.likely_test_files[:3]))
+            hints.append(
+                "likely test files include "
+                + ", ".join(repo_index_summary.likely_test_files[:3])
+            )
         if not hints:
             return " Repo index is available but does not strongly suggest relevant files yet."
         return " Repo index suggests " + "; ".join(hints) + "."
@@ -371,9 +398,15 @@ class Planner:
             return ""
         hints: list[str] = []
         if repo_index_summary.top_level_directories:
-            hints.append("top-level directories include " + ", ".join(repo_index_summary.top_level_directories[:5]))
+            hints.append(
+                "top-level directories include "
+                + ", ".join(repo_index_summary.top_level_directories[:5])
+            )
         if repo_index_summary.likely_test_files:
-            hints.append("likely test files include " + ", ".join(repo_index_summary.likely_test_files[:3]))
+            hints.append(
+                "likely test files include "
+                + ", ".join(repo_index_summary.likely_test_files[:3])
+            )
         if repo_index_summary.python_symbols:
             first_file = next(iter(repo_index_summary.python_symbols.keys()))
             hints.append(f"lightweight Python symbols were found in {first_file}")

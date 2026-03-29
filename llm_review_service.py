@@ -38,7 +38,9 @@ class LocalLLMReviewService:
         if not self.enabled():
             return None
 
-        engine = StructuredOutputRetryEngine(self.settings, artifact_manager, provider=self.provider)
+        engine = StructuredOutputRetryEngine(
+            self.settings, artifact_manager, provider=self.provider
+        )
         fallback_message = "Axiom kept the accepted plan and ignored the unavailable or invalid review output."
         system_instruction = (
             "You are reviewing a structured execution plan for a controlled coding workbench.\n"
@@ -66,7 +68,11 @@ class LocalLLMReviewService:
                 if project_memory
                 else {"summary": "", "known_commands": [], "recent_context": ""}
             ),
-            "repo_index_summary": repo_index_summary.to_dict() if repo_index_summary else {"generated": False},
+            "repo_index_summary": (
+                repo_index_summary.to_dict()
+                if repo_index_summary
+                else {"generated": False}
+            ),
             "plan": plan.to_dict(),
             "instruction": "Review whether the plan is appropriately scoped and not overbuilt for the request.",
         }

@@ -61,10 +61,20 @@ class RepairManager:
 
         step_results: list[StepResult] = []
         try:
-            if failure.category == FailureCategory.COMMAND_EXECUTION_FAILURE and interpretation.command is not None:
-                step_results.append(self._completed(repair_summary.repair_plan.steps[0], "Reviewed failed command output."))
+            if (
+                failure.category == FailureCategory.COMMAND_EXECUTION_FAILURE
+                and interpretation.command is not None
+            ):
+                step_results.append(
+                    self._completed(
+                        repair_summary.repair_plan.steps[0],
+                        "Reviewed failed command output.",
+                    )
+                )
                 retry_result = terminal.run(interpretation.command)
-                retry_step_status = StepStatus.COMPLETED if retry_result.success else StepStatus.FAILED
+                retry_step_status = (
+                    StepStatus.COMPLETED if retry_result.success else StepStatus.FAILED
+                )
                 step_results.append(
                     StepResult(
                         step_id=repair_summary.repair_plan.steps[1].id,
@@ -77,7 +87,12 @@ class RepairManager:
                     )
                 )
                 if not retry_result.success:
-                    step_results.append(self._failed(repair_summary.repair_plan.steps[2], "Retry command still failed."))
+                    step_results.append(
+                        self._failed(
+                            repair_summary.repair_plan.steps[2],
+                            "Retry command still failed.",
+                        )
+                    )
                     repair_summary.attempted = True
                     repair_summary.repair_step_results = step_results
                     repair_summary.repair_execution_result = ExecutionResult(
@@ -102,17 +117,27 @@ class RepairManager:
                         if verification_step.status != StepStatus.FAILED
                         else "Repair retry completed, but verification failed."
                     ),
-                    details=verification_step.details if verification_step.details else retry_result.to_dict(),
+                    details=(
+                        verification_step.details
+                        if verification_step.details
+                        else retry_result.to_dict()
+                    ),
                 )
                 return repair_summary
 
             if (
                 failure.category == FailureCategory.VERIFICATION_FAILURE
-                and interpretation.action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}
+                and interpretation.action
+                in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}
                 and interpretation.target_path is not None
                 and interpretation.content is not None
             ):
-                step_results.append(self._completed(repair_summary.repair_plan.steps[0], "Reviewed verification failure for the written file."))
+                step_results.append(
+                    self._completed(
+                        repair_summary.repair_plan.steps[0],
+                        "Reviewed verification failure for the written file.",
+                    )
+                )
                 workspace.write_text(interpretation.target_path, interpretation.content)
                 step_results.append(
                     self._completed(
@@ -125,18 +150,26 @@ class RepairManager:
                     interpretation.target_path,
                     interpretation.content,
                 )
-                status = StepStatus.COMPLETED if (
-                    verification_result["exists"]
-                    and verification_result["content_matches"]
-                    and verification_result.get("configured_commands_passed", True)
-                ) else StepStatus.FAILED
+                status = (
+                    StepStatus.COMPLETED
+                    if (
+                        verification_result["exists"]
+                        and verification_result["content_matches"]
+                        and verification_result.get("configured_commands_passed", True)
+                    )
+                    else StepStatus.FAILED
+                )
                 step_results.append(
                     StepResult(
                         step_id=repair_summary.repair_plan.steps[2].id,
                         title=repair_summary.repair_plan.steps[2].title,
                         step_type=repair_summary.repair_plan.steps[2].step_type,
                         status=status,
-                        message="Post-repair verification passed." if status == StepStatus.COMPLETED else "Post-repair verification still failed.",
+                        message=(
+                            "Post-repair verification passed."
+                            if status == StepStatus.COMPLETED
+                            else "Post-repair verification still failed."
+                        ),
                         phase=repair_summary.repair_plan.steps[2].phase,
                         details=verification_result,
                     )
@@ -145,12 +178,18 @@ class RepairManager:
                 repair_summary.repair_step_results = step_results
                 repair_summary.repair_execution_result = ExecutionResult(
                     success=status == StepStatus.COMPLETED,
-                    message="Repair rewrite completed." if status == StepStatus.COMPLETED else "Repair rewrite completed, but verification still failed.",
+                    message=(
+                        "Repair rewrite completed."
+                        if status == StepStatus.COMPLETED
+                        else "Repair rewrite completed, but verification still failed."
+                    ),
                     details=verification_result,
                 )
                 return repair_summary
         except Exception as error:
-            step_results.append(self._failed(repair_summary.repair_plan.steps[-1], str(error)))
+            step_results.append(
+                self._failed(repair_summary.repair_plan.steps[-1], str(error))
+            )
             repair_summary.attempted = True
             repair_summary.repair_step_results = step_results
             repair_summary.repair_execution_result = ExecutionResult(
@@ -209,7 +248,10 @@ class RepairManager:
             )
             return plan, False, "Repair is not eligible for policy or scope violations."
 
-        if failure.category == FailureCategory.COMMAND_EXECUTION_FAILURE and interpretation.command is not None:
+        if (
+            failure.category == FailureCategory.COMMAND_EXECUTION_FAILURE
+            and interpretation.command is not None
+        ):
             plan = Plan(
                 steps=[
                     PlanStep(
@@ -250,11 +292,16 @@ class RepairManager:
                     ),
                 ]
             )
-            return plan, True, "A single retry is eligible for command execution failure."
+            return (
+                plan,
+                True,
+                "A single retry is eligible for command execution failure.",
+            )
 
         if (
             failure.category == FailureCategory.VERIFICATION_FAILURE
-            and interpretation.action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}
+            and interpretation.action
+            in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}
             and interpretation.target_path is not None
         ):
             plan = Plan(
@@ -297,7 +344,11 @@ class RepairManager:
                     ),
                 ]
             )
-            return plan, True, "A single narrow rewrite is eligible for direct file verification failure."
+            return (
+                plan,
+                True,
+                "A single narrow rewrite is eligible for direct file verification failure.",
+            )
 
         plan = Plan(
             steps=[
@@ -342,11 +393,17 @@ class RepairManager:
         if repo_index_summary is None or not repo_index_summary.generated:
             return ""
         if repo_index_summary.likely_test_files:
-            return " Repo index indicates likely test coverage in " + ", ".join(repo_index_summary.likely_test_files[:2]) + "."
+            return (
+                " Repo index indicates likely test coverage in "
+                + ", ".join(repo_index_summary.likely_test_files[:2])
+                + "."
+            )
         return " Repo index is available for this repair context."
 
     @staticmethod
-    def _completed(step: PlanStep, message: str, details: dict | None = None) -> StepResult:
+    def _completed(
+        step: PlanStep, message: str, details: dict | None = None
+    ) -> StepResult:
         return StepResult(
             step_id=step.id,
             title=step.title,
@@ -393,7 +450,15 @@ class RepairManager:
             title=step.title,
             step_type=step.step_type,
             status=StepStatus.COMPLETED if success else StepStatus.FAILED,
-            message="Post-repair verification commands passed." if success else "Post-repair verification commands failed.",
+            message=(
+                "Post-repair verification commands passed."
+                if success
+                else "Post-repair verification commands failed."
+            ),
             phase=step.phase,
-            details={"verification_commands": [result.to_dict() for result in command_results]},
+            details={
+                "verification_commands": [
+                    result.to_dict() for result in command_results
+                ]
+            },
         )

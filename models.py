@@ -138,7 +138,9 @@ class LLMStructuredResult:
             "final_message": self.final_message,
             "accepted_payload": self.accepted_payload,
             "events": [event.to_dict() for event in self.events],
-            "artifact_references": [artifact.to_dict() for artifact in self.artifact_references],
+            "artifact_references": [
+                artifact.to_dict() for artifact in self.artifact_references
+            ],
         }
 
 
@@ -265,7 +267,9 @@ class TaskContextPackage:
             "llm_review_summary": self.llm_review_summary,
             "prior_phase_results": self.prior_phase_results,
             "prior_verification_outcomes": self.prior_verification_outcomes,
-            "artifact_references": [artifact.to_dict() for artifact in self.artifact_references],
+            "artifact_references": [
+                artifact.to_dict() for artifact in self.artifact_references
+            ],
         }
 
 
@@ -505,16 +509,22 @@ class RepairSummary:
             "eligible": self.eligible,
             "reason": self.reason,
             "repair_plan": self.repair_plan.to_dict() if self.repair_plan else None,
-            "repair_step_results": [step.to_dict() for step in self.repair_step_results],
+            "repair_step_results": [
+                step.to_dict() for step in self.repair_step_results
+            ],
             "repair_execution_result": (
-                self.repair_execution_result.to_dict() if self.repair_execution_result else None
+                self.repair_execution_result.to_dict()
+                if self.repair_execution_result
+                else None
             ),
             "post_repair_failure_classification": (
                 self.post_repair_failure_classification.to_dict()
                 if self.post_repair_failure_classification
                 else None
             ),
-            "artifact_references": [artifact.to_dict() for artifact in self.artifact_references],
+            "artifact_references": [
+                artifact.to_dict() for artifact in self.artifact_references
+            ],
         }
 
 
@@ -618,9 +628,13 @@ class TaskResult:
             "repo_index_summary": (
                 self.repo_index_summary.to_dict() if self.repo_index_summary else None
             ),
-            "change_preview": self.change_preview.to_dict() if self.change_preview else None,
+            "change_preview": (
+                self.change_preview.to_dict() if self.change_preview else None
+            ),
             "llm_summary": self.llm_summary.to_dict() if self.llm_summary else None,
-            "llm_review_summary": self.llm_review_summary.to_dict() if self.llm_review_summary else None,
+            "llm_review_summary": (
+                self.llm_review_summary.to_dict() if self.llm_review_summary else None
+            ),
             "plan": self.plan.to_dict() if self.plan else None,
             "phase_policies": [policy.to_dict() for policy in self.phase_policies],
             "phase_results": [phase.to_dict() for phase in self.phase_results],
@@ -629,14 +643,22 @@ class TaskResult:
             "files_read": self.files_read,
             "files_modified": self.files_modified,
             "commands_run": [command.to_dict() for command in self.commands_run],
-            "artifact_references": [artifact.to_dict() for artifact in self.artifact_references],
+            "artifact_references": [
+                artifact.to_dict() for artifact in self.artifact_references
+            ],
             "initial_execution_result": (
-                self.initial_execution_result.to_dict() if self.initial_execution_result else None
+                self.initial_execution_result.to_dict()
+                if self.initial_execution_result
+                else None
             ),
             "failure_classification": (
-                self.failure_classification.to_dict() if self.failure_classification else None
+                self.failure_classification.to_dict()
+                if self.failure_classification
+                else None
             ),
-            "repair_summary": self.repair_summary.to_dict() if self.repair_summary else None,
+            "repair_summary": (
+                self.repair_summary.to_dict() if self.repair_summary else None
+            ),
             "final_execution_result": self.final_execution_result.to_dict(),
             "execution_result": self.execution_result.to_dict(),
             "snapshot_reference": (

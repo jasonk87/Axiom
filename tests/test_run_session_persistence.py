@@ -36,7 +36,13 @@ class RunSessionPersistenceTests(unittest.TestCase):
             }
         )
 
-    def _wait_for_status(self, manager: AxiomRunManager, session_id: str, expected: set[str], timeout: float = 10.0) -> dict:
+    def _wait_for_status(
+        self,
+        manager: AxiomRunManager,
+        session_id: str,
+        expected: set[str],
+        timeout: float = 10.0,
+    ) -> dict:
         deadline = time.time() + timeout
         while time.time() < deadline:
             session = manager.get_run_state(session_id)
@@ -62,7 +68,9 @@ class RunSessionPersistenceTests(unittest.TestCase):
     def test_completed_run_survives_restart(self) -> None:
         session = self._prepare_modify()
         self.manager.approve_plan(session["id"])
-        session = self._wait_for_status(self.manager, session["id"], {"awaiting_phase_approval"})
+        session = self._wait_for_status(
+            self.manager, session["id"], {"awaiting_phase_approval"}
+        )
         self.manager.approve_phase(session["id"])
         self._wait_for_status(self.manager, session["id"], {"awaiting_phase_approval"})
         self.manager.approve_phase(session["id"])
@@ -70,7 +78,9 @@ class RunSessionPersistenceTests(unittest.TestCase):
         reloaded = AxiomRunManager()
         loaded = reloaded.get_run_state(completed["id"])
         self.assertEqual(loaded["status"], "completed")
-        self.assertEqual(loaded["final_execution_result"]["message"], "Modified 'demo.txt'.")
+        self.assertEqual(
+            loaded["final_execution_result"]["message"], "Modified 'demo.txt'."
+        )
 
     def test_cancelled_run_survives_restart(self) -> None:
         session = self._prepare_modify()
@@ -78,7 +88,9 @@ class RunSessionPersistenceTests(unittest.TestCase):
         reloaded = AxiomRunManager()
         loaded = reloaded.get_run_state(cancelled["id"])
         self.assertEqual(loaded["status"], "cancelled")
-        self.assertEqual(loaded["final_execution_result"]["details"]["reason"], "Stop now")
+        self.assertEqual(
+            loaded["final_execution_result"]["details"]["reason"], "Stop now"
+        )
 
     def test_active_run_reconciles_to_recovered_after_restart(self) -> None:
         session = self._prepare_modify()
@@ -94,7 +106,9 @@ class RunSessionPersistenceTests(unittest.TestCase):
             loaded["final_execution_result"]["details"]["prior_status"],
             "running",
         )
-        self.assertTrue(any("Recovered after restart" in item for item in loaded["activity"]))
+        self.assertTrue(
+            any("Recovered after restart" in item for item in loaded["activity"])
+        )
 
     def test_preview_provenance_survives_reload(self) -> None:
         session = self._prepare_modify()
@@ -110,7 +124,9 @@ class RunSessionPersistenceTests(unittest.TestCase):
         reloaded = AxiomRunManager()
         loaded = reloaded.get_run_state(declined["id"])
         self.assertEqual(loaded["status"], "declined_plan")
-        self.assertEqual(loaded["final_execution_result"]["details"]["reason"], "Need review")
+        self.assertEqual(
+            loaded["final_execution_result"]["details"]["reason"], "Need review"
+        )
 
 
 if __name__ == "__main__":

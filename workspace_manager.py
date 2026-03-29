@@ -23,7 +23,10 @@ class WorkspaceManager:
 
     def resolve_path(self, relative_path: str) -> Path:
         candidate = (self.project_root / relative_path).resolve()
-        if self.project_root not in candidate.parents and candidate != self.project_root:
+        if (
+            self.project_root not in candidate.parents
+            and candidate != self.project_root
+        ):
             raise ValueError(f"Path '{relative_path}' escapes the project workspace.")
         return candidate
 
@@ -54,7 +57,11 @@ class WorkspaceManager:
         PermissionManager.require_read(self.permissions)
         files: list[str] = []
         for path in self.project_root.rglob("*"):
-            if path.is_file() and ".axiom_snapshots" not in path.parts and ".axiom" not in path.parts:
+            if (
+                path.is_file()
+                and ".axiom_snapshots" not in path.parts
+                and ".axiom" not in path.parts
+            ):
                 try:
                     self._enforce_read(path)
                 except ScopeViolationError:

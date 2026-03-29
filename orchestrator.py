@@ -49,7 +49,9 @@ from workspace_manager import WorkspaceManager
 
 
 class Orchestrator:
-    def __init__(self, project_root: str, llm_settings: LLMSettings | None = None) -> None:
+    def __init__(
+        self, project_root: str, llm_settings: LLMSettings | None = None
+    ) -> None:
         self.project_root = str(Path(project_root).resolve())
         self.planner = Planner()
         self.local_llm_plan_service = LocalLLMPlanService(llm_settings)
@@ -89,7 +91,9 @@ class Orchestrator:
         )
         if llm_summary is not None:
             for artifact in llm_summary.artifact_references:
-                if not any(existing.path == artifact.path for existing in artifact_references):
+                if not any(
+                    existing.path == artifact.path for existing in artifact_references
+                ):
                     artifact_references.append(artifact)
         accepted_plan = llm_plan or deterministic_plan
         llm_review_summary = None
@@ -105,7 +109,10 @@ class Orchestrator:
             )
             if llm_review_summary is not None:
                 for artifact in llm_review_summary.artifact_references:
-                    if not any(existing.path == artifact.path for existing in artifact_references):
+                    if not any(
+                        existing.path == artifact.path
+                        for existing in artifact_references
+                    ):
                         artifact_references.append(artifact)
         return accepted_plan, llm_summary, llm_review_summary
 
@@ -170,13 +177,17 @@ class Orchestrator:
                 artifact_references,
                 repair_summary,
             )
-            final_execution_result = repair_summary.repair_execution_result or initial_execution_result
+            final_execution_result = (
+                repair_summary.repair_execution_result or initial_execution_result
+            )
             if not final_execution_result.success:
-                repair_summary.post_repair_failure_classification = self.failure_classifier.classify(
-                    final_execution_result.message,
-                    repair_summary.repair_step_results,
-                    workspace.blocked_actions,
-                    terminal.commands_run,
+                repair_summary.post_repair_failure_classification = (
+                    self.failure_classifier.classify(
+                        final_execution_result.message,
+                        repair_summary.repair_step_results,
+                        workspace.blocked_actions,
+                        terminal.commands_run,
+                    )
                 )
             return final_execution_result, failure_classification, repair_summary
 
@@ -205,9 +216,21 @@ class Orchestrator:
 
     def _print_change_preview(self, change_preview: ChangePreview) -> None:
         print("\nChange preview:")
-        writes = ", ".join(change_preview.intended_file_writes) if change_preview.intended_file_writes else "none"
-        commands = ", ".join(change_preview.intended_commands) if change_preview.intended_commands else "none"
-        steps = ", ".join(change_preview.relevant_steps) if change_preview.relevant_steps else "none"
+        writes = (
+            ", ".join(change_preview.intended_file_writes)
+            if change_preview.intended_file_writes
+            else "none"
+        )
+        commands = (
+            ", ".join(change_preview.intended_commands)
+            if change_preview.intended_commands
+            else "none"
+        )
+        steps = (
+            ", ".join(change_preview.relevant_steps)
+            if change_preview.relevant_steps
+            else "none"
+        )
         print(f"- intended file writes: {writes}")
         print(f"- intended commands: {commands}")
         print(f"- relevant steps: {steps}")
@@ -238,9 +261,9 @@ class Orchestrator:
             if any(step.status == StepStatus.FAILED for step in phase_steps):
                 status = StepStatus.FAILED
                 message = f"Phase '{phase}' failed."
-            elif any(step.status == StepStatus.SKIPPED for step in phase_steps) and not any(
-                step.status == StepStatus.COMPLETED for step in phase_steps
-            ):
+            elif any(
+                step.status == StepStatus.SKIPPED for step in phase_steps
+            ) and not any(step.status == StepStatus.COMPLETED for step in phase_steps):
                 status = StepStatus.SKIPPED
                 message = f"Phase '{phase}' was skipped."
             elif all(step.status == StepStatus.COMPLETED for step in phase_steps):
@@ -251,7 +274,9 @@ class Orchestrator:
                 message = f"Phase '{phase}' stopped before completion."
 
             verification_outcomes = [
-                step.details for step in phase_steps if step.step_type == StepType.VERIFICATION and step.details
+                step.details
+                for step in phase_steps
+                if step.step_type == StepType.VERIFICATION and step.details
             ]
             phase_results.append(
                 PhaseResult(
@@ -259,11 +284,21 @@ class Orchestrator:
                     status=status,
                     message=message,
                     classification=(
-                        policy_map[phase].classification.value if phase in policy_map else None
+                        policy_map[phase].classification.value
+                        if phase in policy_map
+                        else None
                     ),
-                    approval_required=policy_map[phase].approval_required if phase in policy_map else True,
-                    auto_ran=policy_map[phase].auto_ran if phase in policy_map else False,
-                    approval_reason=policy_map[phase].reason if phase in policy_map else "",
+                    approval_required=(
+                        policy_map[phase].approval_required
+                        if phase in policy_map
+                        else True
+                    ),
+                    auto_ran=(
+                        policy_map[phase].auto_ran if phase in policy_map else False
+                    ),
+                    approval_reason=(
+                        policy_map[phase].reason if phase in policy_map else ""
+                    ),
                     step_ids=[step.step_id for step in phase_steps],
                     verification_outcomes=verification_outcomes,
                 )
@@ -355,12 +390,15 @@ class Orchestrator:
         combined_artifacts = list(artifact_references)
         for command in terminal.commands_run:
             if command.artifact_reference is not None and not any(
-                existing.path == command.artifact_reference.path for existing in combined_artifacts
+                existing.path == command.artifact_reference.path
+                for existing in combined_artifacts
             ):
                 combined_artifacts.append(command.artifact_reference)
         if repair_summary is not None:
             for artifact in repair_summary.artifact_references:
-                if not any(existing.path == artifact.path for existing in combined_artifacts):
+                if not any(
+                    existing.path == artifact.path for existing in combined_artifacts
+                ):
                     combined_artifacts.append(artifact)
 
         return TaskResult(
@@ -405,11 +443,13 @@ class Orchestrator:
             result.to_dict(),
         )
         artifact_references.append(artifact)
-        if not any(existing.path == artifact.path for existing in result.artifact_references):
+        if not any(
+            existing.path == artifact.path for existing in result.artifact_references
+        ):
             result.artifact_references.append(artifact)
-        if (
-            result.context_package is not None
-            and not any(existing.path == artifact.path for existing in result.context_package.artifact_references)
+        if result.context_package is not None and not any(
+            existing.path == artifact.path
+            for existing in result.context_package.artifact_references
         ):
             result.context_package.artifact_references.append(artifact)
 
@@ -421,10 +461,16 @@ class Orchestrator:
     ) -> ExecutionResult:
         if interpretation.target_path:
             content = workspace.read_text(interpretation.target_path)
-            details = {"analysis": self._summarize_file(interpretation.target_path, content)}
+            details = {
+                "analysis": self._summarize_file(interpretation.target_path, content)
+            }
             if repo_index_summary is not None:
-                details["repo_index_note"] = self._conversation_repo_note(repo_index_summary)
-            return ExecutionResult(success=True, message="Analysis completed.", details=details)
+                details["repo_index_note"] = self._conversation_repo_note(
+                    repo_index_summary
+                )
+            return ExecutionResult(
+                success=True, message="Analysis completed.", details=details
+            )
 
         files = workspace.list_files()
         details = {
@@ -434,8 +480,12 @@ class Orchestrator:
             )
         }
         if repo_index_summary is not None:
-            details["repo_index_note"] = self._conversation_repo_note(repo_index_summary)
-        return ExecutionResult(success=True, message="Analysis completed.", details=details)
+            details["repo_index_note"] = self._conversation_repo_note(
+                repo_index_summary
+            )
+        return ExecutionResult(
+            success=True, message="Analysis completed.", details=details
+        )
 
     def _execute_plan(
         self,
@@ -525,8 +575,12 @@ class Orchestrator:
         approved_phases: set[str] = set()
 
         try:
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[0].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[0].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[0].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[0].phase
+                )
             target = workspace.resolve_path(interpretation.target_path)
             scope_manager.enforce_write(target)
             exists = target.exists()
@@ -534,12 +588,19 @@ class Orchestrator:
                 self._completed_step(
                     plan.steps[0],
                     "Target path inspected.",
-                    {"target_path": interpretation.target_path, "already_exists": exists},
+                    {
+                        "target_path": interpretation.target_path,
+                        "already_exists": exists,
+                    },
                 )
             )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[1].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[1].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[1].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[1].phase
+                )
             workspace.write_text(interpretation.target_path, interpretation.content)
             step_results.append(
                 self._completed_step(
@@ -549,8 +610,12 @@ class Orchestrator:
                 )
             )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[2].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[2].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[2].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[2].phase
+                )
             verification_step = self._run_verification_step(
                 step=plan.steps[2],
                 action=interpretation.action,
@@ -566,7 +631,12 @@ class Orchestrator:
                 if success
                 else f"Created '{interpretation.target_path}', but verification failed."
             )
-            return ExecutionResult(success=success, message=message, details=verification_step.details), step_results
+            return (
+                ExecutionResult(
+                    success=success, message=message, details=verification_step.details
+                ),
+                step_results,
+            )
         except ScopeViolationError as error:
             workspace.record_blocked_action(error.to_blocked_action())
             return self._handle_step_failure(plan, step_results, error)
@@ -590,12 +660,20 @@ class Orchestrator:
         approved_phases: set[str] = set()
 
         try:
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[0].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[0].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[0].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[0].phase
+                )
             target = workspace.resolve_path(interpretation.target_path)
             scope_manager.enforce_write(target)
             existed_before = target.exists()
-            previous_content = workspace.read_text(interpretation.target_path) if existed_before else None
+            previous_content = (
+                workspace.read_text(interpretation.target_path)
+                if existed_before
+                else None
+            )
             step_results.append(
                 self._completed_step(
                     plan.steps[0],
@@ -608,8 +686,12 @@ class Orchestrator:
                 )
             )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[1].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[1].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[1].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[1].phase
+                )
             workspace.write_text(interpretation.target_path, interpretation.content)
             step_results.append(
                 self._completed_step(
@@ -622,8 +704,12 @@ class Orchestrator:
                 )
             )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[2].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[2].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[2].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[2].phase
+                )
             verification_step = self._run_verification_step(
                 step=plan.steps[2],
                 action=interpretation.action,
@@ -639,7 +725,12 @@ class Orchestrator:
                 if success
                 else f"Modified '{interpretation.target_path}', but verification failed."
             )
-            return ExecutionResult(success=success, message=message, details=verification_step.details), step_results
+            return (
+                ExecutionResult(
+                    success=success, message=message, details=verification_step.details
+                ),
+                step_results,
+            )
         except ScopeViolationError as error:
             workspace.record_blocked_action(error.to_blocked_action())
             return self._handle_step_failure(plan, step_results, error)
@@ -661,20 +752,33 @@ class Orchestrator:
         approved_phases: set[str] = set()
 
         try:
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[0].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[0].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[0].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[0].phase
+                )
             step_results.append(
                 self._completed_step(
                     plan.steps[0],
                     "Command context confirmed.",
-                    {"command": interpretation.command, "project_root": self.project_root},
+                    {
+                        "command": interpretation.command,
+                        "project_root": self.project_root,
+                    },
                 )
             )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[1].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[1].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[1].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[1].phase
+                )
             result = terminal.run(interpretation.command)
-            execution_status = StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            execution_status = (
+                StepStatus.COMPLETED if result.success else StepStatus.FAILED
+            )
             step_results.append(
                 StepResult(
                     step_id=plan.steps[1].id,
@@ -688,10 +792,21 @@ class Orchestrator:
             )
             if not result.success:
                 step_results.extend(self._skip_remaining_steps(plan.steps[2:]))
-                return ExecutionResult(success=False, message="Command execution failed.", details=result.to_dict()), step_results
+                return (
+                    ExecutionResult(
+                        success=False,
+                        message="Command execution failed.",
+                        details=result.to_dict(),
+                    ),
+                    step_results,
+                )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[2].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[2].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[2].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[2].phase
+                )
             verification_step = self._run_verification_step(
                 step=plan.steps[2],
                 action=interpretation.action,
@@ -703,9 +818,20 @@ class Orchestrator:
             )
             step_results.append(verification_step)
             success = verification_step.status != StepStatus.FAILED
-            message = "Command executed." if success else "Command executed, but verification failed."
-            details = verification_step.details if verification_step.details else result.to_dict()
-            return ExecutionResult(success=success, message=message, details=details), step_results
+            message = (
+                "Command executed."
+                if success
+                else "Command executed, but verification failed."
+            )
+            details = (
+                verification_step.details
+                if verification_step.details
+                else result.to_dict()
+            )
+            return (
+                ExecutionResult(success=success, message=message, details=details),
+                step_results,
+            )
         except Exception as error:
             return self._handle_step_failure(plan, step_results, error)
 
@@ -725,25 +851,45 @@ class Orchestrator:
         approved_phases: set[str] = set()
 
         try:
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[0].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[0].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[0].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[0].phase
+                )
             scope_manager.enforce_full_workspace_write("restore")
             reference = (
                 snapshots.latest_snapshot()
                 if interpretation.snapshot_id is None
                 else snapshots._reference_for(interpretation.snapshot_id)
             )
-            step_results.append(self._completed_step(plan.steps[0], "Snapshot source identified.", reference.to_dict()))
-
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[1].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[1].phase)
-            restored = snapshots.restore_snapshot(interpretation.snapshot_id)
             step_results.append(
-                self._completed_step(plan.steps[1], "Workspace restored from snapshot.", restored.to_dict())
+                self._completed_step(
+                    plan.steps[0], "Snapshot source identified.", reference.to_dict()
+                )
             )
 
-            if not self._approve_phase_if_needed(approval_mode, plan.steps[2].phase, approved_phases, phase_policies):
-                return self._declined_phase_result(plan, step_results, plan.steps[2].phase)
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[1].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[1].phase
+                )
+            restored = snapshots.restore_snapshot(interpretation.snapshot_id)
+            step_results.append(
+                self._completed_step(
+                    plan.steps[1],
+                    "Workspace restored from snapshot.",
+                    restored.to_dict(),
+                )
+            )
+
+            if not self._approve_phase_if_needed(
+                approval_mode, plan.steps[2].phase, approved_phases, phase_policies
+            ):
+                return self._declined_phase_result(
+                    plan, step_results, plan.steps[2].phase
+                )
             verification_step = self._run_verification_step(
                 step=plan.steps[2],
                 action=interpretation.action,
@@ -759,8 +905,15 @@ class Orchestrator:
                 if success
                 else f"Restored snapshot '{restored.snapshot_id}', but verification failed."
             )
-            details = verification_step.details if verification_step.details else restored.to_dict()
-            return ExecutionResult(success=success, message=message, details=details), step_results
+            details = (
+                verification_step.details
+                if verification_step.details
+                else restored.to_dict()
+            )
+            return (
+                ExecutionResult(success=success, message=message, details=details),
+                step_results,
+            )
         except ScopeViolationError as error:
             workspace.record_blocked_action(error.to_blocked_action())
             return self._handle_step_failure(plan, step_results, error)
@@ -789,7 +942,11 @@ class Orchestrator:
             )
 
         if verification.profile == VerificationProfile.BASIC:
-            if action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE} and target_path is not None and expected_content is not None:
+            if (
+                action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}
+                and target_path is not None
+                and expected_content is not None
+            ):
                 verification_result = verification_manager.verify_file_write(
                     target_path,
                     expected_content,
@@ -806,7 +963,11 @@ class Orchestrator:
                     title=step.title,
                     step_type=step.step_type,
                     status=status,
-                    message="Basic verification completed." if status == StepStatus.COMPLETED else "Basic verification failed.",
+                    message=(
+                        "Basic verification completed."
+                        if status == StepStatus.COMPLETED
+                        else "Basic verification failed."
+                    ),
                     phase=step.phase,
                     details=verification_result,
                 )
@@ -825,12 +986,18 @@ class Orchestrator:
                     title=step.title,
                     step_type=step.step_type,
                     status=status,
-                    message="Basic verification completed." if status == StepStatus.COMPLETED else "Basic verification failed.",
+                    message=(
+                        "Basic verification completed."
+                        if status == StepStatus.COMPLETED
+                        else "Basic verification failed."
+                    ),
                     phase=step.phase,
                     details=verification_result,
                 )
             if verification.commands:
-                command_results = verification_manager.run_commands(cancellation_event=cancellation_event)
+                command_results = verification_manager.run_commands(
+                    cancellation_event=cancellation_event
+                )
                 success = all(result.success for result in command_results)
                 return StepResult(
                     step_id=step.id,
@@ -843,7 +1010,11 @@ class Orchestrator:
                         else "Configured verification commands failed."
                     ),
                     phase=step.phase,
-                    details={"verification_commands": [result.to_dict() for result in command_results]},
+                    details={
+                        "verification_commands": [
+                            result.to_dict() for result in command_results
+                        ]
+                    },
                 )
             return StepResult(
                 step_id=step.id,
@@ -854,16 +1025,26 @@ class Orchestrator:
                 phase=step.phase,
             )
 
-        command_results = verification_manager.run_commands(cancellation_event=cancellation_event)
+        command_results = verification_manager.run_commands(
+            cancellation_event=cancellation_event
+        )
         success = all(result.success for result in command_results)
         return StepResult(
             step_id=step.id,
             title=step.title,
             step_type=step.step_type,
             status=StepStatus.COMPLETED if success else StepStatus.FAILED,
-            message="Verification commands completed successfully." if success else "One or more verification commands failed.",
+            message=(
+                "Verification commands completed successfully."
+                if success
+                else "One or more verification commands failed."
+            ),
             phase=step.phase,
-            details={"verification_commands": [result.to_dict() for result in command_results]},
+            details={
+                "verification_commands": [
+                    result.to_dict() for result in command_results
+                ]
+            },
         )
 
     @staticmethod
@@ -880,7 +1061,11 @@ class Orchestrator:
 
     @staticmethod
     def _unsupported_step_result(step) -> StepResult:
-        status = StepStatus.COMPLETED if step.step_type == StepType.DISCOVERY else StepStatus.SKIPPED
+        status = (
+            StepStatus.COMPLETED
+            if step.step_type == StepType.DISCOVERY
+            else StepStatus.SKIPPED
+        )
         message = (
             "Discovery completed for an unsupported execution type."
             if step.step_type == StepType.DISCOVERY
@@ -903,7 +1088,9 @@ class Orchestrator:
         error: Exception,
     ) -> tuple[ExecutionResult, list[StepResult]]:
         completed_ids = {step.step_id for step in step_results}
-        failure_step = next((step for step in plan.steps if step.id not in completed_ids), None)
+        failure_step = next(
+            (step for step in plan.steps if step.id not in completed_ids), None
+        )
         if failure_step is not None:
             step_results.append(
                 StepResult(
@@ -919,7 +1106,10 @@ class Orchestrator:
         remaining_ids = {step.step_id for step in step_results}
         remaining_steps = [step for step in plan.steps if step.id not in remaining_ids]
         step_results.extend(self._skip_remaining_steps(remaining_steps))
-        return ExecutionResult(success=False, message=str(error), details={}), step_results
+        return (
+            ExecutionResult(success=False, message=str(error), details={}),
+            step_results,
+        )
 
     @staticmethod
     def _skip_remaining_steps(steps) -> list[StepResult]:
@@ -948,7 +1138,9 @@ class Orchestrator:
         if policy is not None and policy.auto_run_allowed:
             policy.auto_ran = True
             approved_phases.add(phase)
-            print(f"\nAuto-running read-only phase '{phase}' because it is system-classified as {policy.classification.value}.")
+            print(
+                f"\nAuto-running read-only phase '{phase}' because it is system-classified as {policy.classification.value}."
+            )
             return True
         if approval_mode != ApprovalMode.PHASED or phase in approved_phases:
             approved_phases.add(phase)
@@ -992,11 +1184,23 @@ class Orchestrator:
         )
 
     @staticmethod
-    def _validate_verification_configuration(mode: Mode, verification: VerificationConfig) -> None:
-        if verification.profile == VerificationProfile.COMMANDS_ONLY and mode != Mode.IMPLEMENT:
-            raise RuntimeError("The 'commands_only' verification profile is only allowed in IMPLEMENT mode.")
-        if verification.profile == VerificationProfile.COMMANDS_ONLY and not verification.commands:
-            raise RuntimeError("The 'commands_only' verification profile requires at least one --verify-command.")
+    def _validate_verification_configuration(
+        mode: Mode, verification: VerificationConfig
+    ) -> None:
+        if (
+            verification.profile == VerificationProfile.COMMANDS_ONLY
+            and mode != Mode.IMPLEMENT
+        ):
+            raise RuntimeError(
+                "The 'commands_only' verification profile is only allowed in IMPLEMENT mode."
+            )
+        if (
+            verification.profile == VerificationProfile.COMMANDS_ONLY
+            and not verification.commands
+        ):
+            raise RuntimeError(
+                "The 'commands_only' verification profile requires at least one --verify-command."
+            )
 
     def _interpret_task(self, task: str) -> TaskInterpretation:
         normalized = task.strip()
@@ -1101,7 +1305,10 @@ class Orchestrator:
 
     @staticmethod
     def _conversation_repo_note(repo_index_summary: RepoIndexSummary) -> str:
-        top_dirs = ", ".join(repo_index_summary.top_level_directories[:5]) or "no top-level directories"
+        top_dirs = (
+            ", ".join(repo_index_summary.top_level_directories[:5])
+            or "no top-level directories"
+        )
         return (
             "Repo index is available for this run. "
             f"It saw {repo_index_summary.total_files} file(s) and top-level directories: {top_dirs}."
@@ -1124,7 +1331,9 @@ class Orchestrator:
         permissions = PermissionManager.for_mode(mode)
         verification = verification_config or VerificationConfig()
         artifact_manager = ArtifactManager(self.project_root)
-        artifact_references: list[ArtifactReference] = [artifact_manager.run_reference()]
+        artifact_references: list[ArtifactReference] = [
+            artifact_manager.run_reference()
+        ]
         step_results: list[StepResult] = []
         phase_results: list[PhaseResult] = []
         snapshot_reference = None
@@ -1137,12 +1346,18 @@ class Orchestrator:
         llm_review_summary: LLMStructuredResult | None = None
 
         try:
-            scope_manager = ScopeManager(self.project_root, scope_paths, protected_paths)
+            scope_manager = ScopeManager(
+                self.project_root, scope_paths, protected_paths
+            )
         except ValueError as error:
             scope_manager = ScopeManager(self.project_root)
             workspace = WorkspaceManager(self.project_root, permissions, scope_manager)
-            terminal = TerminalRunner(self.project_root, permissions, command_policy, artifact_manager)
-            final_execution_result = ExecutionResult(success=False, message=str(error), details={})
+            terminal = TerminalRunner(
+                self.project_root, permissions, command_policy, artifact_manager
+            )
+            final_execution_result = ExecutionResult(
+                success=False, message=str(error), details={}
+            )
             result = self._build_result(
                 mode=mode,
                 permissions=permissions,
@@ -1173,7 +1388,9 @@ class Orchestrator:
             return result
 
         workspace = WorkspaceManager(self.project_root, permissions, scope_manager)
-        terminal = TerminalRunner(self.project_root, permissions, command_policy, artifact_manager)
+        terminal = TerminalRunner(
+            self.project_root, permissions, command_policy, artifact_manager
+        )
         preview_manager = PreviewManager(workspace, scope_manager, artifact_manager)
         snapshots = SnapshotManager(self.project_root)
         verification_manager = VerificationManager(verification, workspace, terminal)
@@ -1245,7 +1462,9 @@ class Orchestrator:
         try:
             self._validate_verification_configuration(mode, verification)
             if mode == Mode.CONVERSATION:
-                final_execution_result = self._handle_conversation(workspace, interpretation, repo_index_summary)
+                final_execution_result = self._handle_conversation(
+                    workspace, interpretation, repo_index_summary
+                )
             elif mode == Mode.PLAN:
                 final_execution_result = ExecutionResult(
                     success=True,
@@ -1254,7 +1473,9 @@ class Orchestrator:
                 )
             else:
                 if plan is None:
-                    raise RuntimeError("IMPLEMENT mode requires a plan before execution.")
+                    raise RuntimeError(
+                        "IMPLEMENT mode requires a plan before execution."
+                    )
                 if not self._request_plan_approval(plan):
                     final_execution_result = ExecutionResult(
                         success=False,
@@ -1277,22 +1498,34 @@ class Orchestrator:
                     )
                     phase_results = self._build_phase_results(step_results)
                     for policy in phase_policies:
-                        if policy.phase in {step.phase for step in step_results if step.status == StepStatus.COMPLETED} and not policy.approval_required:
+                        if (
+                            policy.phase
+                            in {
+                                step.phase
+                                for step in step_results
+                                if step.status == StepStatus.COMPLETED
+                            }
+                            and not policy.approval_required
+                        ):
                             policy.auto_ran = True
-                    phase_results = self._build_phase_results_with_policy(step_results, phase_policies)
-                    final_execution_result, failure_classification, repair_summary = self._handle_post_execution_failure(
-                        artifact_manager=artifact_manager,
-                        artifact_references=artifact_references,
-                        auto_repair=auto_repair,
-                        initial_execution_result=initial_execution_result,
-                        step_results=step_results,
-                        workspace=workspace,
-                        terminal=terminal,
-                        verification_manager=verification_manager,
-                        interpretation=interpretation,
-                        verification=verification,
-                        repo_index_summary=repo_index_summary,
-                        scope_manager=scope_manager,
+                    phase_results = self._build_phase_results_with_policy(
+                        step_results, phase_policies
+                    )
+                    final_execution_result, failure_classification, repair_summary = (
+                        self._handle_post_execution_failure(
+                            artifact_manager=artifact_manager,
+                            artifact_references=artifact_references,
+                            auto_repair=auto_repair,
+                            initial_execution_result=initial_execution_result,
+                            step_results=step_results,
+                            workspace=workspace,
+                            terminal=terminal,
+                            verification_manager=verification_manager,
+                            interpretation=interpretation,
+                            verification=verification,
+                            repo_index_summary=repo_index_summary,
+                            scope_manager=scope_manager,
+                        )
                     )
         except (
             PermissionDeniedError,
@@ -1302,8 +1535,12 @@ class Orchestrator:
             ScopeViolationError,
             CommandPolicyError,
         ) as error:
-            final_execution_result = ExecutionResult(success=False, message=str(error), details={})
-            initial_execution_result = initial_execution_result or final_execution_result
+            final_execution_result = ExecutionResult(
+                success=False, message=str(error), details={}
+            )
+            initial_execution_result = (
+                initial_execution_result or final_execution_result
+            )
             if mode == Mode.IMPLEMENT:
                 failure_classification = self.failure_classifier.classify(
                     final_execution_result.message,
@@ -1331,10 +1568,14 @@ class Orchestrator:
                     artifact_references,
                     repair_summary,
                 )
-            phase_results = self._build_phase_results_with_policy(step_results, phase_policies)
+            phase_results = self._build_phase_results_with_policy(
+                step_results, phase_policies
+            )
 
         verification_outcomes = [
-            step.details for step in step_results if step.step_type == StepType.VERIFICATION and step.details
+            step.details
+            for step in step_results
+            if step.step_type == StepType.VERIFICATION and step.details
         ]
         context_package = self.context_builder.build(
             task=task,
