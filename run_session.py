@@ -120,6 +120,7 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
                 target_path=st.get("target_path"),
                 command=st.get("command"),
                 result_summary=st.get("result_summary"),
+                dependencies=st.get("dependencies", []),
             )
             for st in payload.get("subtasks")
         ] if payload.get("subtasks") is not None else None,
@@ -850,7 +851,50 @@ class AxiomRunManager:
 
                 interpretation = interpretation_from_dict(session["task_interpretation"])
                 if interpretation.action == TaskAction.COMPLEX.value:
-                    if session["current_subtask_index"] >= len(interpretation.subtasks or []):
+                    if session.get("completed_subtask_indices") is None:
+                        session["completed_subtask_indices"] = []
+
+                    # Find next unblocked subtask based on dependencies
+                    if session.get("current_subtask_index", -1) in session.get("completed_subtask_indices", []):
+                        session["current_subtask_index"] = -1
+
+                    if session.get("current_subtask_index", -1) == -1:
+                        next_index = -1
+                        for idx, st in enumerate(interpretation.subtasks or []):
+                            if idx in session["completed_subtask_indices"]:
+                                continue
+
+                            # Check if dependencies are met
+                            deps_met = True
+                            if st.dependencies:
+                                for dep in st.dependencies:
+                                    # Simple exact string match against completed descriptions
+                                    # or we check if ALL dependencies are met. A more robust ID system
+                                    # would be better, but we do best effort matching against descriptions.
+                                    dep_found_and_done = False
+                                    for done_idx in session["completed_subtask_indices"]:
+                                        if done_idx < len(interpretation.subtasks or []):
+                                            done_desc = interpretation.subtasks[done_idx].description
+                                            if dep.lower() in done_desc.lower() or done_desc.lower() in dep.lower() or dep == str(done_idx):
+                                                dep_found_and_done = True
+                                                break
+                                    if not dep_found_and_done:
+                                        deps_met = False
+                                        break
+
+                            if deps_met:
+                                next_index = idx
+                                break
+
+                        session["current_subtask_index"] = next_index
+                        self._persist_session(session)
+
+                    if session["current_subtask_index"] == -1 or session["current_subtask_index"] >= len(interpretation.subtasks or []):
+                        # No more available subtasks. Either we're done, or blocked by dependencies.
+                        if len(session.get("completed_subtask_indices", [])) < len(interpretation.subtasks or []):
+                            self._apply_terminal_status(session, RunStatus.FAILED, "Deadlock: remaining subtasks have unsatisfied dependencies.", None)
+                            return
+
                         llm_settings = LLMSettings.from_dict(session.get("llm_settings") or self.llm_settings_manager.get_settings().to_dict())
                         project_root = session["project_root"]
                         artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
@@ -914,6 +958,7 @@ class AxiomRunManager:
                                 description=st["description"],
                                 target_path=st.get("target_path"),
                                 command=st.get("command"),
+                                dependencies=st.get("dependencies", []),
                             ) for st in replan_payload.get("new_subtasks", [])
                         ]
 
@@ -950,12 +995,10 @@ class AxiomRunManager:
                          # Update the main task interpretation in session to capture the subtask's result_summary
                          session["task_interpretation"] = interpretation.to_dict()
 
-                         session["current_subtask_index"] += 1
+                         session["completed_subtask_indices"].append(session["current_subtask_index"])
+                         session["current_subtask_index"] = -1
                          session["current_subtask_content"] = None
                          session["current_subtask_command"] = None
-                         if session["current_subtask_index"] < len(interpretation.subtasks or []):
-                             # Start the next subtask by clearing content/command
-                             pass
                          continue
 
 

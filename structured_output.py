@@ -33,7 +33,7 @@ VALID_REVIEW_VERDICTS = {"accept", "revise", "caution"}
 VALID_REVIEW_SEVERITIES = {"low", "medium", "high"}
 
 DECOMPOSE_TOP_LEVEL_KEYS = {"subtasks"}
-DECOMPOSE_SUBTASK_KEYS = {"action", "description", "target_path", "command"}
+DECOMPOSE_SUBTASK_KEYS = {"action", "description", "target_path", "command", "dependencies"}
 VALID_DECOMPOSE_ACTIONS = {"create_file", "modify_file", "run_command", "analyze", "restore_snapshot", "unknown"}
 
 REPLAN_TOP_LEVEL_KEYS = {"is_complete", "reasoning", "new_subtasks"}

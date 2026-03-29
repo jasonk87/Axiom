@@ -43,9 +43,10 @@ class LocalLLMDecomposeService:
             "You are breaking down a complex coding request into smaller, manageable subtasks for a local model.\n"
             "Return only JSON.\n"
             "The top-level object must be {\"subtasks\": [...]}.\n"
-            "Each subtask must contain exactly these keys: action, description, target_path, command.\n"
+            "Each subtask must contain exactly these keys: action, description, target_path, command, dependencies.\n"
             "Action must be one of: create_file, modify_file, run_command, analyze, restore_snapshot, unknown.\n"
-            "If target_path or command are not applicable, set them to null."
+            "If target_path or command are not applicable, set them to null.\n"
+            "The 'dependencies' key must be a list of strings representing the descriptions or simple IDs of prior subtasks that must be completed before this one can start. If there are no dependencies, return an empty list."
         )
         structured_context = {
             "task": {
@@ -97,7 +98,8 @@ class LocalLLMDecomposeService:
                 action=st["action"],
                 description=st["description"],
                 target_path=st.get("target_path"),
-                command=st.get("command")
+                command=st.get("command"),
+                dependencies=st.get("dependencies", [])
             ) for st in result.payload["subtasks"]
         ]
         return subtasks, result.summary

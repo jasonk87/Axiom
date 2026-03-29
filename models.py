@@ -535,6 +535,7 @@ class SubTask:
     target_path: str | None = None
     command: str | None = None
     result_summary: str | None = None
+    dependencies: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
