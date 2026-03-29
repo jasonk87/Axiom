@@ -167,7 +167,9 @@ class OrchestratorRollbackPreviewTest(unittest.TestCase):
 
             self.assertFalse(result.final_execution_result.success)
             self.assertIsNotNone(result.change_preview)
+            assert result.change_preview is not None
             self.assertEqual(result.change_preview.file_changes[0].before_preview, "ROLLBACK BASELINE")
+            assert result.snapshot_reference is not None
             SnapshotManager(str(project_root)).restore_snapshot(result.snapshot_reference.snapshot_id)
             self.assertEqual((project_root / "rollback.txt").read_text(encoding="utf-8"), "ROLLBACK BASELINE")
 

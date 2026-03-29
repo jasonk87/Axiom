@@ -147,7 +147,7 @@ class LLMRetryTests(unittest.TestCase):
 
         class MemoryAwareProvider:
             def __init__(self) -> None:
-                self.calls = []
+                self.calls: list[str] = []
 
             def generate(self, system_instruction: str, user_instruction: str) -> LLMResponse:
                 self.calls.append(user_instruction)
@@ -186,11 +186,14 @@ class LLMRetryTests(unittest.TestCase):
 
         self.assertIsNotNone(plan_without_memory)
         self.assertIsNotNone(plan_with_memory)
+        assert plan_without_memory is not None
+        assert plan_with_memory is not None
         self.assertNotEqual(plan_without_memory.to_dict(), plan_with_memory.to_dict())
         self.assertIn('"project_memory"', provider.calls[0])
         self.assertIn('"known_commands": []', provider.calls[0])
         self.assertIn('"known_commands": [', provider.calls[1])
         self.assertIn("npm run build", provider.calls[1])
+        assert summary_with_memory is not None
         self.assertTrue(any(event.stage == "apply_project_context" for event in summary_with_memory.events))
 
 

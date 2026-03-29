@@ -169,8 +169,8 @@ class LLMReviewTests(unittest.TestCase):
         review_summary = review_engine.generate_review_output("system", "user", "fallback").summary
 
         orchestrator = Orchestrator(str(self.project_root), llm_settings=self.settings)
-        orchestrator.local_llm_plan_service = FakePlanService(plan, plan_summary)
-        orchestrator.local_llm_review_service = FakeReviewService(review_summary)
+        orchestrator.local_llm_plan_service = FakePlanService(plan, plan_summary)  # type: ignore
+        orchestrator.local_llm_review_service = FakeReviewService(review_summary)  # type: ignore
         interpretation = TaskInterpretation(
             raw_task="Plan a safe file update.",
             summary="Plan a safe file update.",
@@ -191,6 +191,7 @@ class LLMReviewTests(unittest.TestCase):
         )
         self.assertIsNotNone(built_plan)
         self.assertIsNotNone(built_review)
+        assert built_review is not None
         self.assertTrue(built_review.fallback_used)
 
     def test_provider_unavailable_review_falls_back_cleanly(self) -> None:
@@ -240,6 +241,7 @@ class LLMReviewTests(unittest.TestCase):
             plan=plan,
         )
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertIn('"project_memory"', provider.calls[0]["user"])
         self.assertIn("python -m py_compile main.py", provider.calls[0]["user"])
         self.assertTrue(any(event.stage == "apply_project_context" for event in summary.events))

@@ -59,8 +59,10 @@ def stream_output(process: subprocess.Popen[str], prefix: str) -> threading.Thre
     if process.stdout is None:
         return None
 
+    stdout = process.stdout
+
     def _reader() -> None:
-        for line in process.stdout:
+        for line in stdout:
             text = line.rstrip()
             if text:
                 print(f"[{prefix}] {text}")
@@ -109,7 +111,7 @@ def popen_kwargs() -> dict:
         "bufsize": 1,
     }
     if os.name == "nt":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
     return kwargs
 
 

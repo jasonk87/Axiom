@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from artifact_manager import ArtifactManager
 from llm_client import LLMSettings
@@ -56,7 +57,7 @@ class LocalLLMImplementService:
         else:
             return None, None
 
-        structured_context = {
+        structured_context: dict[str, Any] = {
             "subtask": subtask.to_dict(),
             "workspace": {
                 "scope": scope_manager.describe_effective_scope(),

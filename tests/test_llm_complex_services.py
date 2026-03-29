@@ -81,10 +81,12 @@ class LLMServiceTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(subtasks)
+        assert subtasks is not None
         self.assertEqual(len(subtasks), 2)
         self.assertEqual(subtasks[0].action, "create_file")
         self.assertEqual(subtasks[1].command, "pytest")
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertTrue(summary.accepted)
 
     def test_implement_service_success(self) -> None:
@@ -106,6 +108,7 @@ class LLMServiceTests(unittest.TestCase):
 
         self.assertEqual(content, "print('hello world')")
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertTrue(summary.accepted)
 
     def test_replan_service_success(self) -> None:
@@ -148,10 +151,12 @@ class LLMServiceTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(payload)
+        assert payload is not None
         self.assertFalse(payload["is_complete"])
         self.assertEqual(len(payload["new_subtasks"]), 1)
         self.assertEqual(payload["new_subtasks"][0]["command"], "black .")
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertTrue(summary.accepted)
 
 if __name__ == "__main__":

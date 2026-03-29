@@ -122,7 +122,7 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
                 result_summary=st.get("result_summary"),
                 dependencies=st.get("dependencies", []),
             )
-            for st in payload.get("subtasks")
+            for st in payload["subtasks"]
         ] if payload.get("subtasks") is not None else None,
         compressed_history=payload.get("compressed_history"),
         compressed_subtask_count=payload.get("compressed_subtask_count", 0),
@@ -873,7 +873,7 @@ class AxiomRunManager:
                                     # would be better, but we do best effort matching against descriptions.
                                     dep_found_and_done = False
                                     for done_idx in session["completed_subtask_indices"]:
-                                        if done_idx < len(interpretation.subtasks or []):
+                                        if interpretation.subtasks and done_idx < len(interpretation.subtasks):
                                             done_desc = interpretation.subtasks[done_idx].description
                                             if dep.lower() in done_desc.lower() or done_desc.lower() in dep.lower() or dep == str(done_idx):
                                                 dep_found_and_done = True
@@ -900,7 +900,7 @@ class AxiomRunManager:
                         artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
 
                         # Compress history if enabled and threshold exceeded
-                        if llm_settings.compression_enabled:
+                        if llm_settings.compression_enabled and interpretation.subtasks is not None:
                              uncompressed_count = session["current_subtask_index"] - interpretation.compressed_subtask_count
                              if uncompressed_count >= llm_settings.compression_threshold:
                                  compress_service = LocalLLMCompressService(settings=llm_settings)
@@ -967,6 +967,8 @@ class AxiomRunManager:
                              self._finalize_session(session)
                              return
 
+                        if interpretation.subtasks is None:
+                            interpretation.subtasks = []
                         interpretation.subtasks.extend(new_subtasks)
                         session["task_interpretation"] = interpretation.to_dict()
                         session["subtasks"] = [st.to_dict() for st in interpretation.subtasks]
@@ -975,7 +977,8 @@ class AxiomRunManager:
                         self._persist_session(session)
                         return
 
-                    subtask = interpretation.subtasks[session["current_subtask_index"]]
+                    subtasks_list = interpretation.subtasks or []
+                    subtask = subtasks_list[session["current_subtask_index"]]
                     if session.get("current_subtask_content") is None and session.get("current_subtask_command") is None and subtask.action in {"create_file", "modify_file", "run_command"}:
                          # We need to implement this subtask
                          self._generate_and_await_implementation(session, subtask)
@@ -1233,7 +1236,7 @@ class AxiomRunManager:
             )
         elif interpretation.action == TaskAction.COMPLEX.value:
             # Fallback to UNKNOWN if decomposition failed or LLM was disabled
-            interpretation.action = TaskAction.UNKNOWN.value
+            interpretation.action = TaskAction.UNKNOWN.value  # type: ignore
 
         orchestrator = Orchestrator(project_root)
         artifact_manager = ArtifactManager(project_root, run_id=session["artifact_run_id"])
