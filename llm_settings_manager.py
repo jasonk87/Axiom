@@ -47,7 +47,10 @@ class LLMSettingsManager:
                     merged[key] = updates[key]
             candidate = LLMSettings.from_dict(merged)
             if candidate.provider != "ollama":
-                raise LLMProviderError("unsupported_provider", f"Unsupported local provider '{candidate.provider}'.")
+                raise LLMProviderError(
+                    "unsupported_provider",
+                    f"Unsupported local provider '{candidate.provider}'.",
+                )
             if not candidate.model:
                 raise ValueError("Model name must not be empty.")
             if not candidate.base_url:

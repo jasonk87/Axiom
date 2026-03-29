@@ -1,9 +1,18 @@
 from __future__ import annotations
 
-from models import PhasePolicy, PhasePower, Plan, StepType, TaskAction, TaskInterpretation
+from models import (
+    PhasePolicy,
+    PhasePower,
+    Plan,
+    StepType,
+    TaskAction,
+    TaskInterpretation,
+)
 
 
-def classify_plan_phases(plan: Plan | None, interpretation: TaskInterpretation) -> list[PhasePolicy]:
+def classify_plan_phases(
+    plan: Plan | None, interpretation: TaskInterpretation
+) -> list[PhasePolicy]:
     if plan is None:
         return []
 

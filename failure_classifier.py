@@ -49,7 +49,12 @@ class FailureClassifier:
             )
 
         verification_failure = next(
-            (step for step in step_results if step.step_type == StepType.VERIFICATION and step.status.value == "failed"),
+            (
+                step
+                for step in step_results
+                if step.step_type == StepType.VERIFICATION
+                and step.status.value == "failed"
+            ),
             None,
         )
         if verification_failure is not None:
@@ -59,7 +64,9 @@ class FailureClassifier:
                 source="verification",
             )
 
-        failed_command = next((command for command in reversed(commands_run) if not command.success), None)
+        failed_command = next(
+            (command for command in reversed(commands_run) if not command.success), None
+        )
         if failed_command is not None:
             return FailureClassification(
                 category=FailureCategory.COMMAND_EXECUTION_FAILURE,

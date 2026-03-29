@@ -15,7 +15,10 @@ class ArtifactManager:
         self.project_root = Path(project_root).resolve()
         self.axiom_root = self.project_root / self.ROOT_DIR_NAME
         self.runs_root = self.axiom_root / "artifacts"
-        self.run_id = run_id or f"{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+        self.run_id = (
+            run_id
+            or f"{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+        )
         self.run_root = self.runs_root / self.run_id
         self.run_root.mkdir(parents=True, exist_ok=True)
 

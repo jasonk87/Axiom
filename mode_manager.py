@@ -10,4 +10,6 @@ class ModeManager:
             return Mode(raw_mode.lower())
         except ValueError as error:
             valid_modes = ", ".join(mode.value for mode in Mode)
-            raise ValueError(f"Unsupported mode '{raw_mode}'. Valid modes: {valid_modes}.") from error
+            raise ValueError(
+                f"Unsupported mode '{raw_mode}'. Valid modes: {valid_modes}."
+            ) from error

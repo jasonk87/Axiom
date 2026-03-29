@@ -119,7 +119,16 @@ class ProjectManager:
     def _persist_projects(self) -> None:
         self._atomic_write(
             self.projects_path,
-            {"projects": [project.to_dict() for project in sorted(self.projects.values(), key=lambda item: item.updated_at, reverse=True)]},
+            {
+                "projects": [
+                    project.to_dict()
+                    for project in sorted(
+                        self.projects.values(),
+                        key=lambda item: item.updated_at,
+                        reverse=True,
+                    )
+                ]
+            },
         )
 
     def _persist_context(self) -> None:
@@ -150,7 +159,11 @@ class ProjectManager:
             if project_id not in project_memories:
                 project_memories[project_id] = self._default_project_memory(project_id)
                 changed = True
-        stale_ids = [project_id for project_id in project_memories if project_id not in self.projects]
+        stale_ids = [
+            project_id
+            for project_id in project_memories
+            if project_id not in self.projects
+        ]
         for stale_id in stale_ids:
             project_memories.pop(stale_id, None)
             changed = True
@@ -178,11 +191,17 @@ class ProjectManager:
                     **project.to_dict(),
                     "memory": json.loads(
                         json.dumps(
-                            self.memory["project_memories"].get(project.id, self._default_project_memory(project.id))
+                            self.memory["project_memories"].get(
+                                project.id, self._default_project_memory(project.id)
+                            )
                         )
                     ),
                 }
-                for project in sorted(self.projects.values(), key=lambda item: item.updated_at, reverse=True)
+                for project in sorted(
+                    self.projects.values(),
+                    key=lambda item: item.updated_at,
+                    reverse=True,
+                )
             ]
 
     def get_context(self) -> dict:
@@ -193,10 +212,17 @@ class ProjectManager:
         with self.lock:
             return json.loads(json.dumps(self.memory["global_memory"]))
 
-    def update_global_memory(self, *, model_preference: dict | None = None, ui_preferences: dict | None = None) -> dict:
+    def update_global_memory(
+        self,
+        *,
+        model_preference: dict | None = None,
+        ui_preferences: dict | None = None,
+    ) -> dict:
         with self.lock:
             if model_preference is not None:
-                self.memory["global_memory"]["model_preference"] = dict(model_preference)
+                self.memory["global_memory"]["model_preference"] = dict(
+                    model_preference
+                )
             if ui_preferences is not None:
                 self.memory["global_memory"]["ui_preferences"] = dict(ui_preferences)
             self._persist_memory()
@@ -224,7 +250,9 @@ class ProjectManager:
                 **project.to_dict(),
                 "memory": json.loads(
                     json.dumps(
-                        self.memory["project_memories"].get(project_id, self._default_project_memory(project_id))
+                        self.memory["project_memories"].get(
+                            project_id, self._default_project_memory(project_id)
+                        )
                     )
                 ),
             }
@@ -240,13 +268,22 @@ class ProjectManager:
     def create_project(self, root_path: str, name: str | None = None) -> dict:
         normalized = self.normalize_root(root_path)
         with self.lock:
-            existing = next((project for project in self.projects.values() if project.root_path == normalized), None)
+            existing = next(
+                (
+                    project
+                    for project in self.projects.values()
+                    if project.root_path == normalized
+                ),
+                None,
+            )
             if existing is not None:
                 existing.updated_at = _utc_now()
                 if name:
                     existing.name = name
                 self._persist_projects()
-                self.memory["project_memories"].setdefault(existing.id, self._default_project_memory(existing.id))
+                self.memory["project_memories"].setdefault(
+                    existing.id, self._default_project_memory(existing.id)
+                )
                 self._persist_memory()
                 self.context["active_project_id"] = existing.id
                 self.context["active_session_id"] = None
@@ -263,7 +300,9 @@ class ProjectManager:
             )
             self.projects[project.id] = project
             self._persist_projects()
-            self.memory["project_memories"][project.id] = self._default_project_memory(project.id)
+            self.memory["project_memories"][project.id] = self._default_project_memory(
+                project.id
+            )
             self._persist_memory()
             self.context["active_project_id"] = project.id
             self.context["active_session_id"] = None
@@ -277,9 +316,14 @@ class ProjectManager:
         return self.create_project(root_path, name=name)
 
     def create_recovered_project(self, missing_root: str) -> dict:
-        recovered_root = (self.state_root.parent / "recovered_projects" / uuid4().hex[:8]).resolve()
+        recovered_root = (
+            self.state_root.parent / "recovered_projects" / uuid4().hex[:8]
+        ).resolve()
         recovered_root.mkdir(parents=True, exist_ok=True)
-        return self.create_project(str(recovered_root), name=f"Recovered {Path(missing_root).name or 'project'}")
+        return self.create_project(
+            str(recovered_root),
+            name=f"Recovered {Path(missing_root).name or 'project'}",
+        )
 
     def migrate_session_roots(self, sessions: list[dict]) -> bool:
         changed = False

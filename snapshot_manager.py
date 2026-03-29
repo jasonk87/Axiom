@@ -18,7 +18,9 @@ class SnapshotManager:
 
     def create_snapshot(self) -> SnapshotReference:
         self.snapshot_root.mkdir(exist_ok=True)
-        snapshot_id = f"{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+        snapshot_id = (
+            f"{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+        )
         destination = self.snapshot_root / snapshot_id / "workspace"
         shutil.copytree(
             self.project_root,
@@ -37,10 +39,16 @@ class SnapshotManager:
             ),
             encoding="utf-8",
         )
-        return SnapshotReference(snapshot_id=snapshot_id, snapshot_path=str(destination.parent))
+        return SnapshotReference(
+            snapshot_id=snapshot_id, snapshot_path=str(destination.parent)
+        )
 
     def restore_snapshot(self, snapshot_id: str | None = None) -> SnapshotReference:
-        reference = self.latest_snapshot() if snapshot_id is None else self._reference_for(snapshot_id)
+        reference = (
+            self.latest_snapshot()
+            if snapshot_id is None
+            else self._reference_for(snapshot_id)
+        )
         snapshot_workspace = Path(reference.snapshot_path) / "workspace"
 
         for item in self.project_root.iterdir():
@@ -80,5 +88,7 @@ class SnapshotManager:
     def workspace_path(reference: SnapshotReference) -> Path:
         return Path(reference.snapshot_path) / "workspace"
 
-    def resolve_snapshot_path(self, reference: SnapshotReference, relative_path: str) -> Path:
+    def resolve_snapshot_path(
+        self, reference: SnapshotReference, relative_path: str
+    ) -> Path:
         return (self.workspace_path(reference) / relative_path).resolve()

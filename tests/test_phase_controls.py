@@ -7,7 +7,6 @@ from pathlib import Path
 
 from run_session import AxiomRunManager
 
-
 TERMINAL_STATUSES = {
     "completed",
     "failed",
@@ -45,14 +44,18 @@ class PhaseControlTests(unittest.TestCase):
             }
         )
 
-    def _wait_for_status(self, session_id: str, expected: set[str], timeout: float = 5.0) -> dict:
+    def _wait_for_status(
+        self, session_id: str, expected: set[str], timeout: float = 5.0
+    ) -> dict:
         deadline = time.time() + timeout
         while time.time() < deadline:
             session = self.manager.get_run_state(session_id)
             if session["status"] in expected:
                 return session
             time.sleep(0.05)
-        self.fail(f"Timed out waiting for status {expected}. Last state: {self.manager.get_run_state(session_id)}")
+        self.fail(
+            f"Timed out waiting for status {expected}. Last state: {self.manager.get_run_state(session_id)}"
+        )
 
     def test_read_only_phase_auto_runs_after_plan_approval(self) -> None:
         session = self._prepare_modify()
@@ -61,7 +64,11 @@ class PhaseControlTests(unittest.TestCase):
         self.assertEqual(session["pending_phase"], "modify")
         self.assertEqual(session["step_results"][0]["phase"], "understand")
         self.assertEqual(session["step_results"][0]["status"], "completed")
-        understand_policy = next(policy for policy in session["phase_policies"] if policy["phase"] == "understand")
+        understand_policy = next(
+            policy
+            for policy in session["phase_policies"]
+            if policy["phase"] == "understand"
+        )
         self.assertEqual(understand_policy["classification"], "read_only")
         self.assertTrue(understand_policy["auto_ran"])
 
@@ -69,7 +76,11 @@ class PhaseControlTests(unittest.TestCase):
         session = self._prepare_modify()
         session = self.manager.approve_plan(session["id"])
         session = self._wait_for_status(session["id"], {"awaiting_phase_approval"})
-        modify_policy = next(policy for policy in session["phase_policies"] if policy["phase"] == "modify")
+        modify_policy = next(
+            policy
+            for policy in session["phase_policies"]
+            if policy["phase"] == "modify"
+        )
         self.assertEqual(modify_policy["classification"], "writes_files")
         self.assertTrue(modify_policy["approval_required"])
         self.assertEqual(session["pending_phase"], "modify")
@@ -78,7 +89,9 @@ class PhaseControlTests(unittest.TestCase):
         session = self._prepare_modify()
         session = self.manager.decline_plan(session["id"], "Need to review")
         self.assertEqual(session["status"], "declined_plan")
-        self.assertEqual(session["final_execution_result"]["details"]["reason"], "Need to review")
+        self.assertEqual(
+            session["final_execution_result"]["details"]["reason"], "Need to review"
+        )
         self.assertIsNone(session["snapshot_reference"])
 
     def test_decline_phase_stops_cleanly(self) -> None:
@@ -88,14 +101,18 @@ class PhaseControlTests(unittest.TestCase):
         session = self.manager.decline_phase(session["id"], "Do not overwrite yet")
         self.assertEqual(session["status"], "declined_phase")
         self.assertIsNone(session["pending_phase"])
-        skipped_phases = [step for step in session["step_results"] if step["status"] == "skipped"]
+        skipped_phases = [
+            step for step in session["step_results"] if step["status"] == "skipped"
+        ]
         self.assertTrue(skipped_phases)
 
     def test_cancel_before_execution_stops_cleanly(self) -> None:
         session = self._prepare_modify()
         session = self.manager.cancel_run(session["id"], "Pause work")
         self.assertEqual(session["status"], "cancelled")
-        self.assertEqual(session["final_execution_result"]["details"]["reason"], "Pause work")
+        self.assertEqual(
+            session["final_execution_result"]["details"]["reason"], "Pause work"
+        )
 
     def test_cancel_during_phased_flow_prevents_future_phases(self) -> None:
         session = self._prepare_modify()
@@ -103,14 +120,18 @@ class PhaseControlTests(unittest.TestCase):
         session = self._wait_for_status(session["id"], {"awaiting_phase_approval"})
         session = self.manager.cancel_run(session["id"], "Stop before modify")
         self.assertEqual(session["status"], "cancelled")
-        self.assertEqual((self.project_root / "demo.txt").read_text(encoding="utf-8"), "BASELINE")
+        self.assertEqual(
+            (self.project_root / "demo.txt").read_text(encoding="utf-8"), "BASELINE"
+        )
 
-    def test_cancel_during_long_running_command_is_cooperative_and_terminal(self) -> None:
+    def test_cancel_during_long_running_command_is_cooperative_and_terminal(
+        self,
+    ) -> None:
         session = self.manager.prepare_run(
             {
                 "projectPath": str(self.project_root),
                 "mode": "implement",
-                "task": 'Run command python -c "import time; print(\'start\'); time.sleep(5); print(\'end\')"',
+                "task": "Run command python -c \"import time; print('start'); time.sleep(5); print('end')\"",
                 "approvalMode": "normal",
                 "verificationProfile": "none",
                 "verificationCommands": [],
@@ -140,7 +161,9 @@ class PhaseControlTests(unittest.TestCase):
         self.assertEqual(session["pending_phase"], "verify")
         self.manager.approve_phase(session["id"])
         session = self._wait_for_status(session["id"], {"completed"})
-        self.assertEqual((self.project_root / "demo.txt").read_text(encoding="utf-8"), "NEXT CONTENT")
+        self.assertEqual(
+            (self.project_root / "demo.txt").read_text(encoding="utf-8"), "NEXT CONTENT"
+        )
 
 
 if __name__ == "__main__":

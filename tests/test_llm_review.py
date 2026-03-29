@@ -8,10 +8,20 @@ from artifact_manager import ArtifactManager
 from llm_client import LLMProviderError, LLMResponse, LLMSettings
 from llm_retry import StructuredOutputRetryEngine
 from llm_review_service import LocalLLMReviewService
-from models import Mode, Plan, PlanStep, ProjectMemoryContext, RepoIndexSummary, StepType, TaskAction, TaskInterpretation, VerificationConfig, VerificationProfile
+from models import (
+    Mode,
+    Plan,
+    PlanStep,
+    ProjectMemoryContext,
+    RepoIndexSummary,
+    StepType,
+    TaskAction,
+    TaskInterpretation,
+    VerificationConfig,
+    VerificationProfile,
+)
 from orchestrator import Orchestrator
 from scope_manager import ScopeManager
-
 
 VALID_REVIEW_JSON = """
 {
@@ -44,7 +54,9 @@ class FakeProvider:
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
-        return LLMResponse(raw_text=response, provider="fake", model="fake-model", metadata={})
+        return LLMResponse(
+            raw_text=response, provider="fake", model="fake-model", metadata={}
+        )
 
 
 class FakePlanService:
@@ -94,11 +106,14 @@ class LLMReviewTests(unittest.TestCase):
 
     def _engine(self, responses):
         provider = FakeProvider(responses)
-        return StructuredOutputRetryEngine(
-            settings=self.settings,
-            artifact_manager=self.artifact_manager,
-            provider=provider,
-        ), provider
+        return (
+            StructuredOutputRetryEngine(
+                settings=self.settings,
+                artifact_manager=self.artifact_manager,
+                provider=provider,
+            ),
+            provider,
+        )
 
     def test_valid_review_json_accepted_first_try(self) -> None:
         engine, _ = self._engine([VALID_REVIEW_JSON])
@@ -118,7 +133,12 @@ class LLMReviewTests(unittest.TestCase):
         engine, _ = self._engine([wrong_schema, VALID_REVIEW_JSON])
         result = engine.generate_review_output("system", "user", "fallback")
         self.assertTrue(result.summary.accepted)
-        self.assertTrue(any(event.stage == "validate_response" and event.status == "failed" for event in result.summary.events))
+        self.assertTrue(
+            any(
+                event.stage == "validate_response" and event.status == "failed"
+                for event in result.summary.events
+            )
+        )
 
     def test_review_retry_exhaustion_falls_back_cleanly(self) -> None:
         engine, _ = self._engine(["{}", "{}", "{}"])
@@ -144,8 +164,7 @@ class LLMReviewTests(unittest.TestCase):
                 )
             ]
         )
-        plan_engine, _ = self._engine([
-            """
+        plan_engine, _ = self._engine(["""
             {
               "steps": [
                 {
@@ -162,15 +181,18 @@ class LLMReviewTests(unittest.TestCase):
                 }
               ]
             }
-            """.strip()
-        ])
-        plan_summary = plan_engine.generate_plan_output("system", "user", "fallback").summary
+            """.strip()])
+        plan_summary = plan_engine.generate_plan_output(
+            "system", "user", "fallback"
+        ).summary
         review_engine, _ = self._engine(["{}", "{}", "{}"])
-        review_summary = review_engine.generate_review_output("system", "user", "fallback").summary
+        review_summary = review_engine.generate_review_output(
+            "system", "user", "fallback"
+        ).summary
 
         orchestrator = Orchestrator(str(self.project_root), llm_settings=self.settings)
-        orchestrator.local_llm_plan_service = FakePlanService(plan, plan_summary)
-        orchestrator.local_llm_review_service = FakeReviewService(review_summary)
+        orchestrator.local_llm_plan_service = FakePlanService(plan, plan_summary)  # type: ignore
+        orchestrator.local_llm_review_service = FakeReviewService(review_summary)  # type: ignore
         interpretation = TaskInterpretation(
             raw_task="Plan a safe file update.",
             summary="Plan a safe file update.",
@@ -183,7 +205,9 @@ class LLMReviewTests(unittest.TestCase):
             mode=Mode.IMPLEMENT,
             interpretation=interpretation,
             scope_manager=scope_manager,
-            verification=VerificationConfig(profile=VerificationProfile.BASIC, commands=[]),
+            verification=VerificationConfig(
+                profile=VerificationProfile.BASIC, commands=[]
+            ),
             repo_index_summary=RepoIndexSummary(generated=False),
             project_memory=None,
             artifact_manager=self.artifact_manager,
@@ -191,6 +215,7 @@ class LLMReviewTests(unittest.TestCase):
         )
         self.assertIsNotNone(built_plan)
         self.assertIsNotNone(built_review)
+        assert built_review is not None
         self.assertTrue(built_review.fallback_used)
 
     def test_provider_unavailable_review_falls_back_cleanly(self) -> None:
@@ -230,7 +255,9 @@ class LLMReviewTests(unittest.TestCase):
             artifact_manager=self.artifact_manager,
             interpretation=interpretation,
             scope_manager=ScopeManager(str(self.project_root), ["src"], []),
-            verification=VerificationConfig(profile=VerificationProfile.BASIC, commands=[]),
+            verification=VerificationConfig(
+                profile=VerificationProfile.BASIC, commands=[]
+            ),
             repo_index_summary=RepoIndexSummary(generated=False),
             project_memory=ProjectMemoryContext(
                 summary="Python app with a conventional verification flow.",
@@ -240,9 +267,12 @@ class LLMReviewTests(unittest.TestCase):
             plan=plan,
         )
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertIn('"project_memory"', provider.calls[0]["user"])
         self.assertIn("python -m py_compile main.py", provider.calls[0]["user"])
-        self.assertTrue(any(event.stage == "apply_project_context" for event in summary.events))
+        self.assertTrue(
+            any(event.stage == "apply_project_context" for event in summary.events)
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from artifact_manager import ArtifactManager
 from llm_client import LLMSettings
@@ -11,7 +12,6 @@ from models import (
     ProjectMemoryContext,
     RepoIndexSummary,
     SubTask,
-    VerificationConfig,
 )
 from scope_manager import ScopeManager
 
@@ -36,27 +36,29 @@ class LocalLLMImplementService:
         if not self.settings.enabled:
             return None, None
 
-        engine = StructuredOutputRetryEngine(self.settings, artifact_manager, provider=self.provider)
+        engine = StructuredOutputRetryEngine(
+            self.settings, artifact_manager, provider=self.provider
+        )
         fallback_message = "Axiom failed to generate implementation for the subtask."
 
         if subtask.action in {"create_file", "modify_file"}:
             system_instruction = (
                 "You are an expert coding assistant.\n"
                 "Return only JSON.\n"
-                "The top-level object must be {\"content\": \"...\"}.\n"
+                'The top-level object must be {"content": "..."}.\n'
                 "Provide the complete, exact file content based on the description. Do not wrap it in markdown block quotes inside the JSON."
             )
         elif subtask.action == "run_command":
             system_instruction = (
                 "You are an expert shell assistant.\n"
                 "Return only JSON.\n"
-                "The top-level object must be {\"command\": \"...\"}.\n"
+                'The top-level object must be {"command": "..."}.\n'
                 "Provide the exact shell command to execute."
             )
         else:
             return None, None
 
-        structured_context = {
+        structured_context: dict[str, Any] = {
             "subtask": subtask.to_dict(),
             "workspace": {
                 "scope": scope_manager.describe_effective_scope(),
@@ -67,10 +69,14 @@ class LocalLLMImplementService:
                 if project_memory
                 else {"summary": "", "known_commands": [], "recent_context": ""}
             ),
-            "repo_index_summary": repo_index_summary.to_dict() if repo_index_summary else {"generated": False},
+            "repo_index_summary": (
+                repo_index_summary.to_dict()
+                if repo_index_summary
+                else {"generated": False}
+            ),
         }
         if existing_content is not None:
-             structured_context["existing_content"] = existing_content
+            structured_context["existing_content"] = existing_content
 
         context_artifact = artifact_manager.save_json(
             artifact_manager.build_filename("llm_implement_context"),
@@ -93,19 +99,44 @@ class LocalLLMImplementService:
 
         # We define a custom validator inline
         from models import LLMValidationIssue
+
         def validate_impl(payload: dict) -> list[LLMValidationIssue]:
-             issues = []
-             if subtask.action in {"create_file", "modify_file"}:
-                  if "content" not in payload:
-                       issues.append(LLMValidationIssue(code="missing_required_field", message="Missing 'content' field.", path="content"))
-                  elif not isinstance(payload["content"], str):
-                       issues.append(LLMValidationIssue(code="wrong_type", message="'content' must be a string.", path="content"))
-             else:
-                  if "command" not in payload:
-                       issues.append(LLMValidationIssue(code="missing_required_field", message="Missing 'command' field.", path="command"))
-                  elif not isinstance(payload["command"], str):
-                       issues.append(LLMValidationIssue(code="wrong_type", message="'command' must be a string.", path="command"))
-             return issues
+            issues = []
+            if subtask.action in {"create_file", "modify_file"}:
+                if "content" not in payload:
+                    issues.append(
+                        LLMValidationIssue(
+                            code="missing_required_field",
+                            message="Missing 'content' field.",
+                            path="content",
+                        )
+                    )
+                elif not isinstance(payload["content"], str):
+                    issues.append(
+                        LLMValidationIssue(
+                            code="wrong_type",
+                            message="'content' must be a string.",
+                            path="content",
+                        )
+                    )
+            else:
+                if "command" not in payload:
+                    issues.append(
+                        LLMValidationIssue(
+                            code="missing_required_field",
+                            message="Missing 'command' field.",
+                            path="command",
+                        )
+                    )
+                elif not isinstance(payload["command"], str):
+                    issues.append(
+                        LLMValidationIssue(
+                            code="wrong_type",
+                            message="'command' must be a string.",
+                            path="command",
+                        )
+                    )
+            return issues
 
         result = engine.generate_structured_output(
             feature="task_implementation",
@@ -122,6 +153,6 @@ class LocalLLMImplementService:
             return None, result.summary
 
         if subtask.action in {"create_file", "modify_file"}:
-             return result.payload["content"], result.summary
+            return result.payload["content"], result.summary
         else:
-             return result.payload["command"], result.summary
+            return result.payload["command"], result.summary

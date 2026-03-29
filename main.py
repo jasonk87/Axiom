@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import argparse
 
-from models import ApprovalMode, CommandPolicyMode, VerificationConfig, VerificationProfile
+from models import (
+    ApprovalMode,
+    CommandPolicyMode,
+    VerificationConfig,
+    VerificationProfile,
+)
 from mode_manager import ModeManager
 from orchestrator import Orchestrator, format_result
 
@@ -14,8 +19,12 @@ def parse_csv_list(raw_value: str | None) -> list[str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Axiom: a gated local-first coding workbench.")
-    parser.add_argument("--project", required=True, help="Path to the local project workspace.")
+    parser = argparse.ArgumentParser(
+        description="Axiom: a gated local-first coding workbench."
+    )
+    parser.add_argument(
+        "--project", required=True, help="Path to the local project workspace."
+    )
     parser.add_argument(
         "--mode",
         required=True,

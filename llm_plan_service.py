@@ -39,12 +39,14 @@ class LocalLLMPlanService:
         if not self.settings.enabled:
             return None, None
 
-        engine = StructuredOutputRetryEngine(self.settings, artifact_manager, provider=self.provider)
+        engine = StructuredOutputRetryEngine(
+            self.settings, artifact_manager, provider=self.provider
+        )
         fallback_message = "Axiom used the built-in planner instead of trusting an invalid model response."
         system_instruction = (
             "You are producing a strict JSON plan object for a controlled coding workbench.\n"
             "Return only JSON.\n"
-            "The top-level object must be {\"steps\": [...]}.\n"
+            'The top-level object must be {"steps": [...]}.\n'
             "Each step must contain exactly these keys: "
             "id, type, title, description, dependencies, scope_hint, expected_outcome, phase, risk_hint, approval_hint.\n"
             "Use type in {discovery, execution, verification}.\n"
@@ -67,7 +69,11 @@ class LocalLLMPlanService:
                 if project_memory
                 else {"summary": "", "known_commands": [], "recent_context": ""}
             ),
-            "repo_index_summary": repo_index_summary.to_dict() if repo_index_summary else {"generated": False},
+            "repo_index_summary": (
+                repo_index_summary.to_dict()
+                if repo_index_summary
+                else {"generated": False}
+            ),
             "instruction": "Return a small practical plan for this request.",
         }
         context_artifact = artifact_manager.save_json(

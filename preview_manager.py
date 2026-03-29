@@ -4,7 +4,13 @@ import hashlib
 from difflib import unified_diff
 
 from artifact_manager import ArtifactManager
-from models import ChangePreview, PreviewFileChange, SnapshotReference, TaskAction, TaskInterpretation
+from models import (
+    ChangePreview,
+    PreviewFileChange,
+    SnapshotReference,
+    TaskAction,
+    TaskInterpretation,
+)
 from scope_manager import ScopeManager, ScopeViolationError
 from snapshot_manager import SnapshotManager
 from workspace_manager import WorkspaceManager
@@ -36,7 +42,10 @@ class PreviewManager:
             relevant_steps=plan_steps or [],
         )
 
-        if interpretation.action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE} and interpretation.target_path is not None:
+        if (
+            interpretation.action in {TaskAction.CREATE_FILE, TaskAction.MODIFY_FILE}
+            and interpretation.target_path is not None
+        ):
             preview.intended_file_writes.append(interpretation.target_path)
             preview.file_changes.append(
                 self._preview_file_write(
@@ -45,12 +54,19 @@ class PreviewManager:
                     interpretation.content or "",
                 )
             )
-        elif interpretation.action == TaskAction.RUN_COMMAND and interpretation.command is not None:
+        elif (
+            interpretation.action == TaskAction.RUN_COMMAND
+            and interpretation.command is not None
+        ):
             preview.intended_commands.append(interpretation.command)
         elif interpretation.action == TaskAction.RESTORE_SNAPSHOT:
             preview.intended_file_writes.append("<whole workspace restore>")
 
-        if not preview.intended_file_writes and not preview.intended_commands and not preview.relevant_steps:
+        if (
+            not preview.intended_file_writes
+            and not preview.intended_commands
+            and not preview.relevant_steps
+        ):
             return None
 
         if persist:
@@ -79,7 +95,9 @@ class PreviewManager:
         )
         for write in writes:
             preview.file_changes.append(
-                self._preview_file_write(snapshot_reference, write["path"], write["content"])
+                self._preview_file_write(
+                    snapshot_reference, write["path"], write["content"]
+                )
             )
         if persist:
             return self.persist_preview(preview)
@@ -101,7 +119,9 @@ class PreviewManager:
             blocked_reason = error.reason
 
         snapshot_manager = SnapshotManager(str(self.workspace.project_root))
-        snapshot_target = snapshot_manager.resolve_snapshot_path(snapshot_reference, relative_path)
+        snapshot_target = snapshot_manager.resolve_snapshot_path(
+            snapshot_reference, relative_path
+        )
         before_exists = snapshot_target.exists()
         before_content: str | None = None
         if before_exists:
@@ -142,7 +162,9 @@ class PreviewManager:
                 "relative_path": relative_path,
             },
             content_hashes={
-                "before_sha256": self._hash_content(before_content) if before_exists else None,
+                "before_sha256": (
+                    self._hash_content(before_content) if before_exists else None
+                ),
                 "after_sha256": self._hash_content(new_content),
             },
         )

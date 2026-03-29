@@ -4,9 +4,21 @@ from dataclasses import dataclass
 from typing import Callable
 
 from artifact_manager import ArtifactManager
-from llm_client import LLMProviderError, LLMResponse, LLMSettings, build_provider
-from models import ArtifactReference, LLMActivityEvent, LLMStructuredResult, LLMValidationIssue
-from structured_output import parse_json_object, validate_plan_payload, validate_review_payload, validate_decompose_payload, validate_replan_payload, validate_compress_payload
+from llm_client import LLMProviderError, LLMSettings, build_provider
+from models import (
+    ArtifactReference,
+    LLMActivityEvent,
+    LLMStructuredResult,
+    LLMValidationIssue,
+)
+from structured_output import (
+    parse_json_object,
+    validate_plan_payload,
+    validate_review_payload,
+    validate_decompose_payload,
+    validate_replan_payload,
+    validate_compress_payload,
+)
 
 
 @dataclass
@@ -16,7 +28,9 @@ class StructuredPlanOutput:
 
 
 class StructuredOutputRetryEngine:
-    def __init__(self, settings: LLMSettings, artifact_manager: ArtifactManager, provider=None) -> None:
+    def __init__(
+        self, settings: LLMSettings, artifact_manager: ArtifactManager, provider=None
+    ) -> None:
         self.settings = settings
         self.artifact_manager = artifact_manager
         self.provider = provider
@@ -141,7 +155,9 @@ class StructuredOutputRetryEngine:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                response = provider.generate(system_instruction, current_user_instruction)
+                response = provider.generate(
+                    system_instruction, current_user_instruction
+                )
             except LLMProviderError as caught:
                 events.append(
                     LLMActivityEvent(
@@ -165,7 +181,8 @@ class StructuredOutputRetryEngine:
                         retry_limit=self.settings.retry_limit,
                         accepted_payload=None,
                         final_message=f"{caught.message} {fallback_message}",
-                        events=events + [
+                        events=events
+                        + [
                             LLMActivityEvent(
                                 stage="fallback",
                                 status="completed",
@@ -178,7 +195,9 @@ class StructuredOutputRetryEngine:
                 )
 
             attempt_artifact = self.artifact_manager.save_json(
-                self.artifact_manager.build_filename(f"{artifact_prefix}_attempt_{attempt}"),
+                self.artifact_manager.build_filename(
+                    f"{artifact_prefix}_attempt_{attempt}"
+                ),
                 {
                     "feature": feature,
                     "attempt": attempt,
@@ -201,7 +220,9 @@ class StructuredOutputRetryEngine:
             )
 
             payload, parse_issues = parse_json_object(response.raw_text)
-            validation_issues = parse_issues if parse_issues else validator(payload or {})
+            validation_issues = (
+                parse_issues if parse_issues else validator(payload or {})
+            )
             if not validation_issues:
                 events.append(
                     LLMActivityEvent(
@@ -230,7 +251,9 @@ class StructuredOutputRetryEngine:
                 )
 
             validation_artifact = self.artifact_manager.save_json(
-                self.artifact_manager.build_filename(f"{artifact_prefix}_validation_{attempt}"),
+                self.artifact_manager.build_filename(
+                    f"{artifact_prefix}_validation_{attempt}"
+                ),
                 {
                     "feature": feature,
                     "attempt": attempt,
@@ -245,7 +268,9 @@ class StructuredOutputRetryEngine:
                     status="failed",
                     summary=f"Model {output_label} failed validation on attempt {attempt}/{max_attempts}.",
                     attempt=attempt,
-                    details={"issues": [issue.to_dict() for issue in validation_issues]},
+                    details={
+                        "issues": [issue.to_dict() for issue in validation_issues]
+                    },
                     artifact_reference=validation_artifact,
                 )
             )
@@ -253,14 +278,18 @@ class StructuredOutputRetryEngine:
             if attempt == max_attempts:
                 break
 
-            current_user_instruction = self._build_retry_instruction(user_instruction, validation_issues)
+            current_user_instruction = self._build_retry_instruction(
+                user_instruction, validation_issues
+            )
             events.append(
                 LLMActivityEvent(
                     stage="retry_output",
                     status="running",
                     summary=f"Retrying {output_label} (attempt {attempt + 1}/{max_attempts}) with specific correction feedback.",
                     attempt=attempt + 1,
-                    details={"issues": [issue.to_dict() for issue in validation_issues]},
+                    details={
+                        "issues": [issue.to_dict() for issue in validation_issues]
+                    },
                 )
             )
 
@@ -291,9 +320,12 @@ class StructuredOutputRetryEngine:
         )
 
     @staticmethod
-    def _build_retry_instruction(user_instruction: str, issues: list[LLMValidationIssue]) -> str:
+    def _build_retry_instruction(
+        user_instruction: str, issues: list[LLMValidationIssue]
+    ) -> str:
         feedback_lines = "\n".join(
-            f"- {issue.code} at {issue.path or '$'}: {issue.message}" for issue in issues
+            f"- {issue.code} at {issue.path or '$'}: {issue.message}"
+            for issue in issues
         )
         return (
             f"{user_instruction}\n\n"

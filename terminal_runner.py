@@ -87,16 +87,22 @@ class TerminalRunner:
         return f"{text[: self.PREVIEW_LIMIT]}... [truncated]"
 
     @staticmethod
-    def _build_summary(command: str, exit_code: int, stdout: str, stderr: str, cancelled: bool) -> str:
+    def _build_summary(
+        command: str, exit_code: int, stdout: str, stderr: str, cancelled: bool
+    ) -> str:
         if cancelled:
             return f"Command cancelled: {command}."
         if exit_code == 0:
-            first_line = next((line.strip() for line in stdout.splitlines() if line.strip()), "")
+            first_line = next(
+                (line.strip() for line in stdout.splitlines() if line.strip()), ""
+            )
             if first_line:
                 return f"Command succeeded: {command}. First output line: {first_line}"
             return f"Command succeeded: {command}."
 
-        first_error = next((line.strip() for line in stderr.splitlines() if line.strip()), "")
+        first_error = next(
+            (line.strip() for line in stderr.splitlines() if line.strip()), ""
+        )
         if first_error:
             return f"Command failed: {command}. First error line: {first_error}"
         return f"Command failed: {command} with exit code {exit_code}."

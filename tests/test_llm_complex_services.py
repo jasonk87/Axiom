@@ -8,7 +8,13 @@ from llm_client import LLMResponse, LLMSettings
 from llm_decompose_service import LocalLLMDecomposeService
 from llm_implement_service import LocalLLMImplementService
 from llm_replan_service import LocalLLMReplanService
-from models import SubTask, TaskAction, TaskInterpretation, VerificationConfig, VerificationProfile
+from models import (
+    SubTask,
+    TaskAction,
+    TaskInterpretation,
+    VerificationConfig,
+    VerificationProfile,
+)
 from scope_manager import ScopeManager
 
 
@@ -81,10 +87,12 @@ class LLMServiceTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(subtasks)
+        assert subtasks is not None
         self.assertEqual(len(subtasks), 2)
         self.assertEqual(subtasks[0].action, "create_file")
         self.assertEqual(subtasks[1].command, "pytest")
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertTrue(summary.accepted)
 
     def test_implement_service_success(self) -> None:
@@ -106,6 +114,7 @@ class LLMServiceTests(unittest.TestCase):
 
         self.assertEqual(content, "print('hello world')")
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertTrue(summary.accepted)
 
     def test_replan_service_success(self) -> None:
@@ -134,7 +143,9 @@ class LLMServiceTests(unittest.TestCase):
             action=TaskAction.COMPLEX,
         )
         completed_subtasks = [
-            SubTask(action="create_file", description="Done step", result_summary="Success")
+            SubTask(
+                action="create_file", description="Done step", result_summary="Success"
+            )
         ]
 
         payload, summary = service.generate_replan(
@@ -148,11 +159,14 @@ class LLMServiceTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(payload)
+        assert payload is not None
         self.assertFalse(payload["is_complete"])
         self.assertEqual(len(payload["new_subtasks"]), 1)
         self.assertEqual(payload["new_subtasks"][0]["command"], "black .")
         self.assertIsNotNone(summary)
+        assert summary is not None
         self.assertTrue(summary.accepted)
+
 
 if __name__ == "__main__":
     unittest.main()

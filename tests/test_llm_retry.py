@@ -8,9 +8,15 @@ from artifact_manager import ArtifactManager
 from llm_client import LLMProviderError, LLMResponse, LLMSettings
 from llm_plan_service import LocalLLMPlanService
 from llm_retry import StructuredOutputRetryEngine
-from models import ProjectMemoryContext, RepoIndexSummary, TaskAction, TaskInterpretation, VerificationConfig, VerificationProfile
+from models import (
+    ProjectMemoryContext,
+    RepoIndexSummary,
+    TaskAction,
+    TaskInterpretation,
+    VerificationConfig,
+    VerificationProfile,
+)
 from scope_manager import ScopeManager
-
 
 VALID_PLAN_JSON = """
 {
@@ -76,11 +82,14 @@ class LLMRetryTests(unittest.TestCase):
 
     def _engine(self, responses):
         provider = FakeProvider(responses)
-        return StructuredOutputRetryEngine(
-            settings=self.settings,
-            artifact_manager=self.artifact_manager,
-            provider=provider,
-        ), provider
+        return (
+            StructuredOutputRetryEngine(
+                settings=self.settings,
+                artifact_manager=self.artifact_manager,
+                provider=provider,
+            ),
+            provider,
+        )
 
     def test_valid_json_accepted_first_try(self) -> None:
         engine, _ = self._engine([VALID_PLAN_JSON])
@@ -95,7 +104,9 @@ class LLMRetryTests(unittest.TestCase):
         self.assertIsNotNone(result.payload)
         self.assertTrue(result.summary.accepted)
         self.assertEqual(result.summary.attempts_used, 2)
-        self.assertTrue(any(event.stage == "retry_output" for event in result.summary.events))
+        self.assertTrue(
+            any(event.stage == "retry_output" for event in result.summary.events)
+        )
 
     def test_wrong_schema_retried_then_accepted(self) -> None:
         wrong_schema = '{"steps":[{"id":"step-1"}]}'
@@ -103,7 +114,12 @@ class LLMRetryTests(unittest.TestCase):
         result = engine.generate_plan_output("system", "user", "fallback")
         self.assertIsNotNone(result.payload)
         self.assertTrue(result.summary.accepted)
-        self.assertTrue(any(event.stage == "validate_response" and event.status == "failed" for event in result.summary.events))
+        self.assertTrue(
+            any(
+                event.stage == "validate_response" and event.status == "failed"
+                for event in result.summary.events
+            )
+        )
 
     def test_retry_exhaustion_falls_back_cleanly(self) -> None:
         engine, _ = self._engine(["{}", "{}", "{}"])
@@ -120,9 +136,16 @@ class LLMRetryTests(unittest.TestCase):
         self.assertIsNone(result.payload)
         self.assertFalse(result.summary.accepted)
         self.assertTrue(result.summary.fallback_used)
-        self.assertTrue(any(event.stage == "query_model" and event.status == "failed" for event in result.summary.events))
+        self.assertTrue(
+            any(
+                event.stage == "query_model" and event.status == "failed"
+                for event in result.summary.events
+            )
+        )
 
-    def test_project_memory_is_included_in_plan_input_and_can_change_output(self) -> None:
+    def test_project_memory_is_included_in_plan_input_and_can_change_output(
+        self,
+    ) -> None:
         def response_for(user_instruction: str) -> str:
             if "npm run build" in user_instruction:
                 return """
@@ -147,11 +170,18 @@ class LLMRetryTests(unittest.TestCase):
 
         class MemoryAwareProvider:
             def __init__(self) -> None:
-                self.calls = []
+                self.calls: list[str] = []
 
-            def generate(self, system_instruction: str, user_instruction: str) -> LLMResponse:
+            def generate(
+                self, system_instruction: str, user_instruction: str
+            ) -> LLMResponse:
                 self.calls.append(user_instruction)
-                return LLMResponse(raw_text=response_for(user_instruction), provider="fake", model="fake-model", metadata={})
+                return LLMResponse(
+                    raw_text=response_for(user_instruction),
+                    provider="fake",
+                    model="fake-model",
+                    metadata={},
+                )
 
         provider = MemoryAwareProvider()
         service = LocalLLMPlanService(settings=self.settings, provider=provider)
@@ -167,7 +197,9 @@ class LLMRetryTests(unittest.TestCase):
             artifact_manager=self.artifact_manager,
             interpretation=interpretation,
             scope_manager=scope_manager,
-            verification=VerificationConfig(profile=VerificationProfile.NONE, commands=[]),
+            verification=VerificationConfig(
+                profile=VerificationProfile.NONE, commands=[]
+            ),
             repo_index_summary=RepoIndexSummary(generated=False),
             project_memory=None,
         )
@@ -175,7 +207,9 @@ class LLMRetryTests(unittest.TestCase):
             artifact_manager=self.artifact_manager,
             interpretation=interpretation,
             scope_manager=scope_manager,
-            verification=VerificationConfig(profile=VerificationProfile.NONE, commands=[]),
+            verification=VerificationConfig(
+                profile=VerificationProfile.NONE, commands=[]
+            ),
             repo_index_summary=RepoIndexSummary(generated=False),
             project_memory=ProjectMemoryContext(
                 summary="Node project with a standard npm build flow.",
@@ -186,12 +220,20 @@ class LLMRetryTests(unittest.TestCase):
 
         self.assertIsNotNone(plan_without_memory)
         self.assertIsNotNone(plan_with_memory)
+        assert plan_without_memory is not None
+        assert plan_with_memory is not None
         self.assertNotEqual(plan_without_memory.to_dict(), plan_with_memory.to_dict())
         self.assertIn('"project_memory"', provider.calls[0])
         self.assertIn('"known_commands": []', provider.calls[0])
         self.assertIn('"known_commands": [', provider.calls[1])
         self.assertIn("npm run build", provider.calls[1])
-        self.assertTrue(any(event.stage == "apply_project_context" for event in summary_with_memory.events))
+        assert summary_with_memory is not None
+        self.assertTrue(
+            any(
+                event.stage == "apply_project_context"
+                for event in summary_with_memory.events
+            )
+        )
 
 
 if __name__ == "__main__":

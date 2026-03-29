@@ -10,20 +10,31 @@ from urllib.parse import parse_qs, urlparse
 
 from run_session import AxiomRunManager
 
-
 ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "ui" / "dist"
-EXCLUDED_TREE_NAMES = {".axiom", ".axiom_snapshots", "__pycache__", "node_modules", "dist"}
+EXCLUDED_TREE_NAMES = {
+    ".axiom",
+    ".axiom_snapshots",
+    "__pycache__",
+    "node_modules",
+    "dist",
+}
 STATE = AxiomRunManager()
 
 
 def tree_for_directory(project_root: Path, current: Path | None = None) -> list[dict]:
     current = current or project_root
     nodes: list[dict] = []
-    for child in sorted(current.iterdir(), key=lambda item: (item.is_file(), item.name.lower())):
+    for child in sorted(
+        current.iterdir(), key=lambda item: (item.is_file(), item.name.lower())
+    ):
         if child.name in EXCLUDED_TREE_NAMES:
             continue
-        relative_path = "." if child == project_root else str(child.relative_to(project_root)).replace("\\", "/")
+        relative_path = (
+            "."
+            if child == project_root
+            else str(child.relative_to(project_root)).replace("\\", "/")
+        )
         if child.is_dir():
             nodes.append(
                 {
@@ -56,7 +67,10 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/projects":
                 self._send_json(STATE.list_projects())
                 return
-            if parsed.path.startswith("/api/projects/") and parsed.path != "/api/projects/active":
+            if (
+                parsed.path.startswith("/api/projects/")
+                and parsed.path != "/api/projects/active"
+            ):
                 project_id = parsed.path.split("/")[-1]
                 self._send_json(STATE.get_project(project_id))
                 return
@@ -83,13 +97,24 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
             payload = self._read_json()
             if parsed.path == "/api/project/tree":
                 if payload.get("projectId"):
-                    project_root = Path(STATE.project_manager.get_project(payload["projectId"]).root_path).resolve()
+                    project_root = Path(
+                        STATE.project_manager.get_project(
+                            payload["projectId"]
+                        ).root_path
+                    ).resolve()
                 else:
                     project_root = Path(payload["projectPath"]).resolve()
-                self._send_json({"projectPath": str(project_root), "tree": tree_for_directory(project_root)})
+                self._send_json(
+                    {
+                        "projectPath": str(project_root),
+                        "tree": tree_for_directory(project_root),
+                    }
+                )
                 return
             if parsed.path == "/api/projects":
-                self._send_json(STATE.create_project(payload["path"], payload.get("name")))
+                self._send_json(
+                    STATE.create_project(payload["path"], payload.get("name"))
+                )
                 return
             if parsed.path == "/api/projects/active":
                 self._send_json(STATE.set_active_project(payload["projectId"]))
@@ -122,11 +147,15 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path.endswith("/decline-decomposition"):
                 session_id = parsed.path.split("/")[-2]
-                self._send_json(STATE.decline_decomposition(session_id, payload.get("reason")))
+                self._send_json(
+                    STATE.decline_decomposition(session_id, payload.get("reason"))
+                )
                 return
             if parsed.path.endswith("/decline-implementation"):
                 session_id = parsed.path.split("/")[-2]
-                self._send_json(STATE.decline_implementation(session_id, payload.get("reason")))
+                self._send_json(
+                    STATE.decline_implementation(session_id, payload.get("reason"))
+                )
                 return
             if parsed.path.endswith("/decline-phase"):
                 session_id = parsed.path.split("/")[-2]
@@ -158,11 +187,15 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         raw_path = query.get("path", [""])[0]
         if not raw_path:
-            self._send_json({"error": "Artifact path is required."}, status=HTTPStatus.BAD_REQUEST)
+            self._send_json(
+                {"error": "Artifact path is required."}, status=HTTPStatus.BAD_REQUEST
+            )
             return
         artifact_path = Path(raw_path).resolve()
         if not artifact_path.exists():
-            self._send_json({"error": "Artifact does not exist."}, status=HTTPStatus.NOT_FOUND)
+            self._send_json(
+                {"error": "Artifact does not exist."}, status=HTTPStatus.NOT_FOUND
+            )
             return
         text = artifact_path.read_text(encoding="utf-8")
         try:
@@ -180,7 +213,9 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
     def _serve_static(self, raw_path: str) -> None:
         if not DIST_DIR.exists():
             self._send_json(
-                {"error": "UI build output was not found. Start the Vite dev server or build the frontend first."},
+                {
+                    "error": "UI build output was not found. Start the Vite dev server or build the frontend first."
+                },
                 status=HTTPStatus.NOT_FOUND,
             )
             return
@@ -191,7 +226,9 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         content = requested.read_bytes()
-        content_type = mimetypes.guess_type(str(requested))[0] or "application/octet-stream"
+        content_type = (
+            mimetypes.guess_type(str(requested))[0] or "application/octet-stream"
+        )
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
