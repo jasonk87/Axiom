@@ -140,6 +140,20 @@ export async function cancelRun(sessionId: string, reason?: string): Promise<Axi
   });
 }
 
+export async function archiveRun(sessionId: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/archive`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function unarchiveRun(sessionId: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/unarchive`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export async function fetchArtifact(path: string): Promise<ArtifactContent> {
   const url = `/api/artifact?path=${encodeURIComponent(path)}`;
   return request(url);

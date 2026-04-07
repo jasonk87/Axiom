@@ -83,6 +83,7 @@ export type AxiomSession = {
   project_root: string;
   status: string;
   mode: string;
+  archived?: boolean;
   updated_at?: string;
   created_at?: string;
   pending_phase?: string | null;

@@ -165,6 +165,14 @@ class AxiomUIRequestHandler(BaseHTTPRequestHandler):
                 session_id = parsed.path.split("/")[-2]
                 self._send_json(STATE.cancel_run(session_id, payload.get("reason")))
                 return
+            if parsed.path.endswith("/archive"):
+                session_id = parsed.path.split("/")[-2]
+                self._send_json(STATE.archive_run(session_id))
+                return
+            if parsed.path.endswith("/unarchive"):
+                session_id = parsed.path.split("/")[-2]
+                self._send_json(STATE.unarchive_run(session_id))
+                return
             self._send_json({"error": "Not found."}, status=HTTPStatus.NOT_FOUND)
         except Exception as error:
             self._send_json({"error": str(error)}, status=HTTPStatus.BAD_REQUEST)

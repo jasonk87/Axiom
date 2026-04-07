@@ -942,6 +942,18 @@ class AxiomRunManager:
             self._persist_session(session)
         return self.get_run_state(session_id)
 
+    def archive_run(self, session_id: str) -> dict:
+        session = self._session(session_id)
+        session["archived"] = True
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
+    def unarchive_run(self, session_id: str) -> dict:
+        session = self._session(session_id)
+        session["archived"] = False
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
     def _start_worker(self, session_id: str) -> None:
         session = self._session(session_id)
         existing = session.get("_thread")

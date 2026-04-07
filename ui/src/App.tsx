@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  archiveRun,
+  unarchiveRun,
   approvePhase,
   approvePlan,
   approveDecomposition,
@@ -214,6 +216,7 @@ export default function App() {
   const [layout, setLayout] = useLocalStorageState<LayoutState>("axiom-ui-session-layout-v3", DEFAULT_LAYOUT);
   const [expandedSteps, setExpandedSteps] = useLocalStorageState<Record<string, boolean>>("axiom-ui-step-expansion-v3", {});
   const [activeSessionId, setActiveSessionId] = useLocalStorageState<string | null>("axiom-ui-active-session-v3", null);
+  const [showArchived, setShowArchived] = useLocalStorageState<boolean>("axiom-ui-show-archived-v1", false);
   const [visibleStepCount, setVisibleStepCount] = useState(0);
   const [streamSignature, setStreamSignature] = useState("");
   const resizeRef = useRef<{ start: number; size: number } | null>(null);
@@ -550,13 +553,37 @@ export default function App() {
         setProjectPath(project.root_path);
       }
       const latestRun = recentRuns
-        .filter((run) => run.project_id === projectId)
+        .filter((run) => run.project_id === projectId && !run.archived)
         .sort((a, b) => (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? ""))[0];
       if (latestRun) {
         const next = await fetchRun(latestRun.id);
         setSession(next);
         setActiveSessionId(next.id);
       }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleArchiveSession(runId: string) {
+    setBusy(true);
+    try {
+      await archiveRun(runId);
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnarchiveSession(runId: string) {
+    setBusy(true);
+    try {
+      await unarchiveRun(runId);
+      await refreshRuns();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -615,8 +642,9 @@ export default function App() {
         label: project.name,
         memory: project.memory,
         runs: recentRuns
-          .filter((run) => run.project_id === project.id)
+          .filter((run) => run.project_id === project.id && (showArchived || !run.archived))
           .sort((a, b) => (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? "")),
+        hasArchived: recentRuns.some((run) => run.project_id === project.id && run.archived),
       }))
       .sort((a, b) => (b.runs[0]?.updated_at ?? b.root).localeCompare(a.runs[0]?.updated_at ?? a.root));
   }, [projects, recentRuns]);
@@ -1070,7 +1098,16 @@ export default function App() {
 
         {!layout.leftCollapsed ? (
           <div className="sidebar-scroll">
-            <div className="sidebar-section-heading">Projects</div>
+            <div className="sidebar-section-header">
+              <div className="sidebar-section-heading">Projects</div>
+              <button
+                className={`archive-toggle ${showArchived ? "active" : ""}`}
+                onClick={() => setShowArchived(!showArchived)}
+                title={showArchived ? "Hide archived sessions" : "Show archived sessions"}
+              >
+                {showArchived ? "Showing Archived" : "Show Archived"}
+              </button>
+            </div>
             {groupedProjects.length === 0 ? (
               <div className="sidebar-empty-state">
                 <strong>Open a project folder to get started</strong>
@@ -1095,20 +1132,31 @@ export default function App() {
                 <div className="session-thread-list">
                   {group.runs.length === 0 ? <div className="session-thread-empty">No sessions yet</div> : null}
                   {group.runs.map((run) => (
-                    <button
-                      key={run.id}
-                      className={run.id === session?.id ? "session-thread active" : "session-thread"}
-                      onClick={() => handleSelectSession(run.id)}
-                    >
-                      <div className="session-thread-main">
-                        <div className="session-thread-title">{run.task_interpretation?.summary ?? "New task"}</div>
-                        <div className="session-thread-meta">
-                          <span>{relativeTime(run.updated_at ?? run.created_at)}</span>
-                          <span>{humanizeStatus(run.status)}</span>
+                    <div key={run.id} className="session-thread-container">
+                      <button
+                        className={`${run.id === session?.id ? "session-thread active" : "session-thread"} ${run.archived ? "archived" : ""}`}
+                        onClick={() => handleSelectSession(run.id)}
+                      >
+                        <div className="session-thread-main">
+                          <div className="session-thread-title">{run.task_interpretation?.summary ?? "New task"}</div>
+                          <div className="session-thread-meta">
+                            <span>{relativeTime(run.updated_at ?? run.created_at)}</span>
+                            <span>{humanizeStatus(run.status)}</span>
+                          </div>
                         </div>
-                      </div>
-                      {diffCount(run) ? <span className="thread-diff-pill">{diffCount(run)}</span> : null}
-                    </button>
+                        {diffCount(run) ? <span className="thread-diff-pill">{diffCount(run)}</span> : null}
+                      </button>
+                      <button
+                        className="session-archive-button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          run.archived ? handleUnarchiveSession(run.id) : handleArchiveSession(run.id);
+                        }}
+                        title={run.archived ? "Unarchive session" : "Archive session"}
+                      >
+                        {run.archived ? "↺" : "×"}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </section>
