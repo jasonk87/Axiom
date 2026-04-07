@@ -706,6 +706,7 @@ textarea {
 .artifact-chip-row,
 .context-action-row,
 .composer-row,
+.steer-button,
 .session-step-actions,
 .approval-inline-bar,
 .provenance-row,
@@ -913,9 +914,56 @@ textarea {
 }
 
 .plan-step-card.active-subtask {
-  border-color: rgba(47, 123, 255, 0.6);
-  background: rgba(240, 246, 255, 0.9);
+  border-left: 4px solid var(--md-sys-color-primary) !important;
+  background: var(--md-sys-color-primary-container);
   box-shadow: 0 4px 12px rgba(47, 123, 255, 0.1);
+}
+
+.plan-step-card.completed-subtask {
+  opacity: 0.8;
+  border-left: 4px solid #75c693;
+}
+
+.subtask-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  margin-right: 8px;
+}
+
+.subtask-badge.success {
+  background: #75c693;
+  color: white;
+}
+
+.subtask-badge.active {
+  background: var(--md-sys-color-primary);
+  color: white;
+  animation: pulse 2s infinite;
+}
+
+.subtask-target {
+  font-size: 0.85rem;
+  color: var(--md-sys-color-primary);
+  margin-top: 4px;
+  font-family: 'Roboto Mono', monospace;
+}
+
+.subtask-command {
+  display: block;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.8rem;
+  background: #1e1e1e;
+  color: #dcdcdc;
+  padding: 8px;
+  border-radius: 4px;
+  margin-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .detail-note.success {
@@ -983,8 +1031,28 @@ textarea {
 
 .primary-button.large,
 .ghost-button.large,
-.run-button {
-  min-width: 118px;
+.run-button,
+.steer-button {
+  min-width: 100px;
+}
+
+.steer-button {
+    border: 0;
+    border-radius: 28px;
+    padding: 12px 24px;
+    color: var(--md-sys-color-on-secondary-container);
+    background: var(--md-sys-color-secondary-container);
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: .1px;
+    box-shadow: 0 1px 3px 1px rgba(0,0,0,0.1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.steer-button:hover:not(:disabled) {
+    background: var(--md-sys-color-secondary);
+    color: var(--md-sys-color-on-secondary);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .empty-stream-state {

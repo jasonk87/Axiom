@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   archiveRun,
   unarchiveRun,
+  steerRun,
+  queueTask,
   approvePhase,
   approvePlan,
   approveDecomposition,
@@ -333,6 +335,13 @@ export default function App() {
       setError("Open a project folder before starting a task.");
       return;
     }
+
+    if (session && isActiveStatus(session.status)) {
+        // If a session is already running, Enter should Queue by default
+        await handleQueueTask();
+        return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -354,6 +363,37 @@ export default function App() {
       const next = await prepareRun(payload);
       setSession(next);
       setActiveSessionId(next.id);
+      setTask("");
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSteerRun() {
+    if (!session || !task.trim()) return;
+    setBusy(true);
+    try {
+      const next = await steerRun(session.id, task);
+      setSession(next);
+      setTask("");
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleQueueTask() {
+    if (!session || !task.trim()) return;
+    setBusy(true);
+    try {
+      const next = await queueTask(session.id, task);
+      setSession(next);
+      setTask("");
       await refreshRuns();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -779,26 +819,32 @@ export default function App() {
       steps.push({
         id: "decomposition",
         key: namespacedStepKey("decomposition"),
-        title: "Decomposing task...",
-        summary: `Broke the task down into ${session.subtasks.length} subtasks.`,
+        title: "Guiding Features & Subtasks",
+        summary: `Jules is working through ${session.subtasks.length} subtasks to implement your request.`,
         status: "complete",
         detail: (
           <div className="plan-step-list">
-            {session.subtasks.map((subtask, i) => (
-              <div key={i} className={`plan-step-card ${session.current_subtask_index === i ? "active-subtask" : ""}`}>
-                <div className="plan-step-meta">
-                  <span>{subtask.action}</span>
-                </div>
-                <strong>{subtask.description}</strong>
-                {subtask.target_path && <p>Target: {subtask.target_path}</p>}
-                {subtask.command && <p>Command: {subtask.command}</p>}
-                {subtask.result_summary && (
-                  <div className="detail-note success">
-                    Result: {subtask.result_summary}
+            {session.subtasks.map((subtask, i) => {
+              const isCompleted = (session.completed_subtask_indices ?? []).includes(i);
+              const isCurrent = session.current_subtask_index === i;
+              return (
+                <div key={i} className={`plan-step-card ${isCurrent ? "active-subtask" : ""} ${isCompleted ? "completed-subtask" : ""}`}>
+                  <div className="plan-step-meta">
+                    <span className="subtask-badge">{subtask.action}</span>
+                    {isCompleted && <span className="subtask-badge success">Completed</span>}
+                    {isCurrent && <span className="subtask-badge active">In Progress</span>}
                   </div>
-                )}
-              </div>
-            ))}
+                  <strong>{subtask.description}</strong>
+                  {subtask.target_path && <p className="subtask-target">Target: {subtask.target_path}</p>}
+                  {subtask.command && <code className="subtask-command">{subtask.command}</code>}
+                  {subtask.result_summary && (
+                    <div className="detail-note success">
+                      {subtask.result_summary}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ),
         actionLabel: "Inspect Subtasks",
@@ -1370,10 +1416,42 @@ export default function App() {
               <input
                 value={task}
                 onChange={(event) => setTask(event.target.value)}
-                placeholder={activeProject ? "Ask Jules to build something..." : "Open a project folder to begin"}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    if (event.ctrlKey || event.metaKey) {
+                      void handleSteerRun();
+                    } else {
+                      void handleRun();
+                    }
+                  }
+                }}
+                placeholder={
+                    activeProject
+                        ? (session && isActiveStatus(session.status))
+                            ? "Enter to queue, Ctrl+Enter to steer Jules..."
+                            : "Ask Jules to build something..."
+                        : "Open a project folder to begin"
+                }
                 disabled={!activeProject}
               />
-              <button className={`run-button ${busy ? "loading" : ""}`} onClick={handleRun} disabled={busy || !task.trim() || !activeProject}>Run</button>
+              <button
+                className={`run-button ${busy ? "loading" : ""}`}
+                onClick={handleRun}
+                disabled={busy || !task.trim() || !activeProject}
+                title={session && isActiveStatus(session.status) ? "Queue Task" : "Run Task"}
+              >
+                {session && isActiveStatus(session.status) ? "Queue" : "Run"}
+              </button>
+              {session && isActiveStatus(session.status) && (
+                <button
+                    className="steer-button"
+                    onClick={handleSteerRun}
+                    disabled={busy || !task.trim()}
+                    title="Steer Jules immediately"
+                >
+                    Steer
+                </button>
+              )}
             </div>
             {!activeProject ? <div className="composer-helper">Open a project folder before creating a new session.</div> : null}
           </div>

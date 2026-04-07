@@ -954,6 +954,24 @@ class AxiomRunManager:
         self._persist_session(session)
         return self.get_run_state(session_id)
 
+    def queue_task(self, session_id: str, task: str) -> dict:
+        session = self._session(session_id)
+        if "queued_tasks" not in session:
+            session["queued_tasks"] = []
+        session["queued_tasks"].append(task)
+        session["activity"].append(f"Queued new task: {task}")
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
+    def steer_run(self, session_id: str, prompt: str) -> dict:
+        session = self._session(session_id)
+        if "steering_prompts" not in session:
+            session["steering_prompts"] = []
+        session["steering_prompts"].append(prompt)
+        session["activity"].append(f"Received steering input: {prompt}")
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
     def _start_worker(self, session_id: str) -> None:
         session = self._session(session_id)
         existing = session.get("_thread")
@@ -1506,6 +1524,18 @@ class AxiomRunManager:
                 subtask.result_summary = (
                     f"Status: {last_step['status']}. Message: {last_step['message']}"
                 )
+
+        # Check for steering prompts after subtask execution
+        if session.get("steering_prompts"):
+            steering_prompt = session["steering_prompts"].pop(0)
+            session["activity"].append(f"Reacting to steering: {steering_prompt}")
+            # Update the task interpretation to include the steering prompt
+            interpretation.raw_task = f"{interpretation.raw_task}\n\n[USER STEER]: {steering_prompt}"
+            session["task_interpretation"] = interpretation.to_dict()
+
+            # Force a replan by setting current_subtask_index to -1 and tricking the loop
+            session["current_subtask_index"] = -1
+            self._persist_session(session)
 
     def _execute_phase(self, session: dict, phase: str) -> None:
         plan = plan_from_dict(session["plan"])
@@ -2191,6 +2221,32 @@ class AxiomRunManager:
             if result.final_execution_result.success
             else "Execution ended with a failure summary."
         )
+
+        # If there are queued tasks, reset session state to process the next one
+        if session.get("queued_tasks"):
+            next_task = session["queued_tasks"].pop(0)
+            session["activity"].append(f"Starting next queued task: {next_task}")
+
+            # Update interpretation with new task
+            # For simplicity, we reset many fields to allow Orchestrator logic to re-run
+            interpretation.raw_task = next_task
+            interpretation.summary = next_task
+            interpretation.action = TaskAction.COMPLEX # Assume complex for now
+            interpretation.subtasks = None
+            interpretation.compressed_history = None
+            interpretation.compressed_subtask_count = 0
+
+            session["task_interpretation"] = interpretation.to_dict()
+            session["status"] = RunStatus.RUNNING.value
+            session["current_subtask_index"] = -1
+            session["completed_subtask_indices"] = []
+            session["phase_order"] = []
+            session["next_phase_index"] = 0
+
+            self._persist_session(session)
+            self._start_worker(session["id"])
+            return
+
         self._persist_session(session)
 
     def _build_success_execution_result(self, session: dict) -> ExecutionResult:
