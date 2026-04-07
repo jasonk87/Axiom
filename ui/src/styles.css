@@ -14,8 +14,12 @@
   --md-sys-color-outline: #73777f;
   --md-sys-color-error: #ba1a1a;
   --md-sys-color-on-error: #ffffff;
+  --md-sys-color-success: #1e6b45;
+  --md-sys-color-success-container: #d7f0e1;
+  --md-sys-color-warning: #805000;
+  --md-sys-color-warning-container: #ffecce;
 
-  font-family: "Google Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Google Sans", "Roboto", "Segoe UI", "Inter", Helvetica, Arial, sans-serif;
   color: var(--md-sys-color-on-surface);
   background: var(--md-sys-color-surface);
   line-height: 1.5;
@@ -168,7 +172,8 @@ textarea {
 .new-task-button:hover,
 .run-button:hover:not(:disabled),
 .primary-button:hover:not(:disabled) {
-  background: #1b66c9;
+  background: var(--md-sys-color-primary);
+  filter: brightness(0.9);
   box-shadow: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px 0 rgba(0,0,0,0.3);
   transform: translateY(-1px);
 }
@@ -452,17 +457,17 @@ textarea {
 
 .mini-pill.success,
 .status-chip.complete {
-  background: rgba(215, 240, 225, 0.6);
-  border-color: rgba(143, 208, 170, 0.5);
-  color: #1e6b45;
+  background: var(--md-sys-color-success-container);
+  border-color: transparent;
+  color: var(--md-sys-color-success);
 }
 
 .mini-pill.warning,
 .status-chip.warning,
 .status-chip.pending {
-  background: rgba(255, 236, 204, 0.6);
-  border-color: rgba(242, 196, 111, 0.5);
-  color: #805000;
+  background: var(--md-sys-color-warning-container);
+  border-color: transparent;
+  color: var(--md-sys-color-warning);
 }
 
 .status-chip.running {
@@ -654,11 +659,11 @@ textarea {
 }
 
 .status-orb.complete {
-  background: #75c693;
+  background: var(--md-sys-color-success);
 }
 
 .status-orb.warning {
-  background: #f0b34d;
+  background: var(--md-sys-color-warning);
 }
 
 .status-orb.running {
@@ -816,8 +821,8 @@ textarea {
 }
 
 .session-step-icon.status-complete {
-  background: #e8f5ed;
-  border-color: #a4d8b9;
+  background: var(--md-sys-color-success-container);
+  border-color: var(--md-sys-color-success);
   transform: scale(0.9);
 }
 
@@ -825,8 +830,8 @@ textarea {
   width: 12px;
   height: 7px;
   background: transparent;
-  border-left: 2px solid #1a7c49;
-  border-bottom: 2px solid #1a7c49;
+  border-left: 2px solid var(--md-sys-color-success);
+  border-bottom: 2px solid var(--md-sys-color-success);
   border-radius: 0;
   transform: rotate(-45deg) translateY(-2px) translateX(0px);
 }
@@ -848,16 +853,16 @@ textarea {
 }
 
 .session-step-icon.status-warning {
-  background: #ffeccc;
-  border-color: #f2c46f;
+  background: var(--md-sys-color-warning-container);
+  border-color: var(--md-sys-color-warning);
 }
 
 .session-step-icon.status-warning .session-step-icon-inner {
   width: 3px;
   height: 12px;
   border-radius: 3px;
-  background: #915700;
-  box-shadow: 0 15px 0 0 #915700;
+  background: var(--md-sys-color-warning);
+  box-shadow: 0 15px 0 0 var(--md-sys-color-warning);
 }
 
 .session-step-header {
@@ -921,7 +926,7 @@ textarea {
 
 .plan-step-card.completed-subtask {
   opacity: 0.8;
-  border-left: 4px solid #75c693;
+  border-left: 4px solid var(--md-sys-color-success);
 }
 
 .subtask-badge {
@@ -936,7 +941,7 @@ textarea {
 }
 
 .subtask-badge.success {
-  background: #75c693;
+  background: var(--md-sys-color-success);
   color: white;
 }
 
@@ -967,7 +972,7 @@ textarea {
 }
 
 .detail-note.success {
-  color: #206f48;
+  color: var(--md-sys-color-success);
   margin-top: 8px;
   font-weight: 500;
 }
