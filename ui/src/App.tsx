@@ -60,7 +60,7 @@ const DEFAULT_LLM_SETTINGS: LLMSettings = {
   review_enabled: true,
   provider: "ollama",
   base_url: "http://127.0.0.1:11434",
-  model: "llama3.2:3b",
+  model: "gemma-4",
   timeout_seconds: 20,
   retry_limit: 2,
   temperature: 0.1,
@@ -132,7 +132,7 @@ function inferRunAppTask(session: AxiomSession | null): string {
 }
 
 function inferCommitTask(): string {
-  return 'Run command git add -A && git commit -m "Axiom update"';
+  return 'Run command git add -A && git commit -m "Jules update"';
 }
 
 function previewSummary(change: PreviewFileChange): string {
@@ -638,14 +638,14 @@ export default function App() {
           ? "Applying project context..."
           : kind === "plan"
             ? event.stage === "query_model"
-              ? "Asking local model for plan..."
+              ? "Asking Jules for plan..."
               : event.stage === "validate_response"
                 ? "Validating plan response..."
                 : event.stage === "retry_output"
                   ? `Retrying plan output (attempt ${event.attempt})...`
                   : event.stage === "fallback"
                     ? "Using system fallback plan..."
-                    : "Local model planning"
+                    : "Jules planning"
             : event.stage === "query_model"
               ? "Reviewing plan for overbuild and scope drift..."
               : event.stage === "validate_response"
@@ -654,7 +654,7 @@ export default function App() {
                   ? `Retrying review output (attempt ${event.attempt})...`
                   : event.stage === "fallback"
                     ? "Review fallback used..."
-                    : "Local model review";
+                    : "Jules review";
       return {
         id: `${kind}-llm-${index}`,
         key: namespacedStepKey(`${kind}-llm-${index}`),
@@ -907,7 +907,7 @@ export default function App() {
       summary:
         commandResults.length > 0
           ? `${commandResults.length} command result(s) captured inline for this task.`
-          : "Command output will appear inline here when Axiom runs verification or shell work.",
+          : "Command output will appear inline here when Jules runs verification or shell work.",
       status: commandStepStatus,
       detail: (
         <div className="command-stack">
@@ -972,7 +972,7 @@ export default function App() {
       key: namespacedStepKey("review"),
       title: hasIssue ? "Reviewing failure state..." : "Reviewing changes...",
       summary: hasIssue
-        ? "Axiom captured failure, repair, or recovery context for review."
+        ? "Jules captured failure, repair, or recovery context for review."
         : "Checking whether the result matches intent without scope drift.",
       status: hasIssue ? "warning" : session.final_execution_result ? "complete" : "pending",
       detail: (
@@ -1049,8 +1049,8 @@ export default function App() {
       <aside className={layout.leftCollapsed ? "session-sidebar collapsed" : "session-sidebar"}>
         <div className="sidebar-top">
           <div className="brand-row">
-            <div className="brand-mark">A</div>
-            {!layout.leftCollapsed ? <div className="brand-wordmark">Axiom</div> : null}
+            <div className="brand-mark">J</div>
+            {!layout.leftCollapsed ? <div className="brand-wordmark">Jules</div> : null}
             <button className="ghost-button" onClick={() => setLayout((current) => ({ ...current, leftCollapsed: !current.leftCollapsed }))}>
               {layout.leftCollapsed ? ">" : "<"}
             </button>
@@ -1074,7 +1074,7 @@ export default function App() {
             {groupedProjects.length === 0 ? (
               <div className="sidebar-empty-state">
                 <strong>Open a project folder to get started</strong>
-                <p>Axiom sessions live inside real rooted folders. Open one to begin a task.</p>
+                <p>Jules sessions live inside real rooted folders. Open one to begin a task.</p>
                 <button className="ghost-button" onClick={openProjectPicker}>Open Folder</button>
               </div>
             ) : null}
@@ -1137,7 +1137,7 @@ export default function App() {
               <div>
                 <h1>
                   {session?.task_interpretation?.summary ??
-                    (emptyProjectState ? "Open a project folder to begin" : "Start a new task in this project")}
+                    (emptyProjectState ? "Open a project folder to begin" : "Welcome to Jules")}
                 </h1>
                 <p>
                   {session?.task_interpretation?.raw_task ??
@@ -1197,7 +1197,7 @@ export default function App() {
             {emptyProjectState ? (
               <div className="empty-stream-state">
                 <h2>Open a project folder to begin</h2>
-                <p>Axiom organizes sessions under real project roots. Choose a folder, then start a task inside that project.</p>
+                <p>Jules organizes sessions under real project roots. Choose a folder, then start a task inside that project.</p>
                 <button className="primary-button" onClick={openProjectPicker}>Open Folder</button>
               </div>
             ) : visibleSteps.length === 0 ? (
@@ -1205,7 +1205,7 @@ export default function App() {
                 <h2>{busy ? "Waking up the session..." : noProjectSelected ? "Select a project to continue" : "Session-first by default"}</h2>
                 <p>
                   {busy
-                    ? "Axiom is preparing workspace context and the first stream events."
+                    ? "Jules is preparing workspace context and the first stream events."
                     : noProjectSelected
                       ? "Choose a project from the sidebar, then start a new task in that rooted workspace."
                       : "The stream will stay alive here, even before a task is running. Start with the bottom input bar."}
@@ -1322,7 +1322,7 @@ export default function App() {
               <input
                 value={task}
                 onChange={(event) => setTask(event.target.value)}
-                placeholder={activeProject ? "Ask Axiom to build something..." : "Open a project folder to begin"}
+                placeholder={activeProject ? "Ask Jules to build something..." : "Open a project folder to begin"}
                 disabled={!activeProject}
               />
               <button className={`run-button ${busy ? "loading" : ""}`} onClick={handleRun} disabled={busy || !task.trim() || !activeProject}>Run</button>
@@ -1337,7 +1337,7 @@ export default function App() {
           <div className="project-picker-intro">
             <strong>Choose a workspace root</strong>
             <p>
-              Native folder picking is not available in this browser flow, so Axiom uses known workspaces first and a
+              Native folder picking is not available in this browser flow, so Jules uses known workspaces first and a
               manual absolute-path fallback when needed.
             </p>
           </div>
@@ -1393,7 +1393,7 @@ export default function App() {
                   </label>
                 </div>
                 <div className="project-picker-actions">
-                  <span className="detail-note">Axiom will create the project if the root is new, or reopen it if it already exists.</span>
+                  <span className="detail-note">Jules will create the project if the root is new, or reopen it if it already exists.</span>
                   <button className="primary-button" onClick={handleCreateProject} disabled={busy || !projectPath.trim()}>
                     Open Folder
                   </button>
