@@ -1176,6 +1176,64 @@ class AxiomRunManager:
                         # Update the main task interpretation in session to capture the subtask's result_summary
                         session["task_interpretation"] = interpretation.to_dict()
 
+                        llm_settings = LLMSettings.from_dict(
+                            session.get("llm_settings")
+                            or self.llm_settings_manager.get_settings().to_dict()
+                        )
+
+                        if llm_settings.enabled and llm_settings.review_enabled:
+                            from llm_eval_service import LocalLLMEvalService
+
+                            eval_service = LocalLLMEvalService(settings=llm_settings)
+                            project_root = session["project_root"]
+                            artifact_manager = ArtifactManager(
+                                project_root, run_id=session["artifact_run_id"]
+                            )
+                            scope_manager = ScopeManager(
+                                project_root,
+                                session["request"].get("scopePaths", []),
+                                session["request"].get("protectedPaths", []),
+                            )
+                            verification = verification_from_dict(session["verification"])
+                            repo_index_summary = repo_index_summary_from_dict(
+                                session["repo_index_summary"]
+                            )
+                            project_memory = project_memory_from_dict(
+                                session.get("project_memory")
+                            )
+
+                            eval_payload, eval_summary = eval_service.generate_eval(
+                                artifact_manager=artifact_manager,
+                                interpretation=interpretation,
+                                subtask=subtask,
+                                scope_manager=scope_manager,
+                                verification=verification,
+                                repo_index_summary=repo_index_summary,
+                                project_memory=project_memory,
+                            )
+
+                            if eval_summary is not None:
+                                for artifact in eval_summary.artifact_references:
+                                    candidate = artifact.to_dict()
+                                    if candidate not in session["artifact_references"]:
+                                        session["artifact_references"].append(candidate)
+
+                            # If evaluation fails, we append a new "fix" subtask immediately to address it
+                            if eval_payload is not None and not eval_payload.get("success", True):
+                                session["activity"].append(
+                                    f"Evaluation found subtask failed: {eval_payload.get('reasoning')} - Injecting a follow up task."
+                                )
+                                fix_subtask = SubTask(
+                                    action="complex",
+                                    description=f"Fix the previous subtask which failed: {eval_payload.get('reasoning')}",
+                                    dependencies=[subtask.description]
+                                )
+                                if interpretation.subtasks is None:
+                                    interpretation.subtasks = []
+                                interpretation.subtasks.append(fix_subtask)
+                                session["task_interpretation"] = interpretation.to_dict()
+                                session["subtasks"] = [st.to_dict() for st in interpretation.subtasks]
+
                         session["completed_subtask_indices"].append(
                             session["current_subtask_index"]
                         )

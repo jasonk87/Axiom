@@ -127,22 +127,27 @@ class RepoIndexer:
         if vector_store is not None and files_to_embed:
 
             def _embed_and_sync(v_store, f_to_embed):
-                for rel_path, full_path in f_to_embed:
-                    try:
-                        content = full_path.read_text(encoding="utf-8")
-                        v_store.add_document(rel_path, content)
-                    except Exception:
-                        pass
                 try:
-                    v_store.sync_index()
+                    for rel_path, full_path in f_to_embed:
+                        try:
+                            content = full_path.read_text(encoding="utf-8")
+                            v_store.add_document(rel_path, content)
+                        except Exception:
+                            pass
+                    try:
+                        v_store.sync_index()
+                    except Exception as e:
+                        print(f"[RepoIndexer] Background vector store sync failed: {e}")
                 except Exception as e:
-                    print(f"[RepoIndexer] Background vector store sync failed: {e}")
+                    print(f"[RepoIndexer] Background embedding thread failed completely: {e}")
 
             # Fire and forget thread for embedding
             thread = threading.Thread(
-                target=_embed_and_sync, args=(vector_store, files_to_embed), daemon=True
+                target=_embed_and_sync, args=(vector_store, files_to_embed), daemon=True, name="RepoIndexerEmbeddingThread"
             )
             thread.start()
+            # Store the thread reference in case it needs to be tracked/joined later
+            self._background_thread = thread
 
         summary = RepoIndexSummary(
             generated=True,

@@ -51,6 +51,8 @@ VALID_DECOMPOSE_ACTIONS = {
 REPLAN_TOP_LEVEL_KEYS = {"is_complete", "reasoning", "new_subtasks"}
 COMPRESS_TOP_LEVEL_KEYS = {"summary"}
 
+EVAL_TOP_LEVEL_KEYS = {"success", "reasoning"}
+
 
 def parse_json_object(
     raw_text: str,
@@ -173,6 +175,52 @@ def validate_plan_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
                         path=f"{path}.dependencies",
                     )
                 )
+    return issues
+
+
+def validate_eval_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
+    issues: list[LLMValidationIssue] = []
+    extra_top_level = set(payload.keys()) - EVAL_TOP_LEVEL_KEYS
+    if extra_top_level:
+        issues.append(
+            LLMValidationIssue(
+                code="extra_keys",
+                message=f"Unexpected top-level keys: {sorted(extra_top_level)}.",
+                path="$",
+            )
+        )
+
+    for key in ["success", "reasoning"]:
+        if key not in payload:
+            issues.append(
+                LLMValidationIssue(
+                    code="missing_required_field",
+                    message=f"Missing required field '{key}'.",
+                    path=key,
+                )
+            )
+
+    if issues:
+        return issues
+
+    if not isinstance(payload["success"], bool):
+        issues.append(
+            LLMValidationIssue(
+                code="wrong_type",
+                message="Field 'success' must be a boolean.",
+                path="success",
+            )
+        )
+
+    if not isinstance(payload["reasoning"], str):
+        issues.append(
+            LLMValidationIssue(
+                code="wrong_type",
+                message="Field 'reasoning' must be a string.",
+                path="reasoning",
+            )
+        )
+
     return issues
 
 

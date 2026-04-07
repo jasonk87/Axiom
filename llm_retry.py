@@ -18,6 +18,7 @@ from structured_output import (
     validate_decompose_payload,
     validate_replan_payload,
     validate_compress_payload,
+    validate_eval_payload,
 )
 
 
@@ -51,6 +52,26 @@ class StructuredOutputRetryEngine:
             fallback_message=fallback_message,
             validator=validate_plan_payload,
             artifact_prefix="llm_plan",
+            initial_events=initial_events,
+            initial_artifacts=initial_artifacts,
+        )
+
+    def generate_eval_output(
+        self,
+        system_instruction: str,
+        user_instruction: str,
+        fallback_message: str,
+        initial_events: list[LLMActivityEvent] | None = None,
+        initial_artifacts: list[ArtifactReference] | None = None,
+    ) -> StructuredPlanOutput:
+        return self.generate_structured_output(
+            feature="subtask_evaluation",
+            output_label="subtask evaluation",
+            system_instruction=system_instruction,
+            user_instruction=user_instruction,
+            fallback_message=fallback_message,
+            validator=validate_eval_payload,
+            artifact_prefix="llm_eval",
             initial_events=initial_events,
             initial_artifacts=initial_artifacts,
         )
