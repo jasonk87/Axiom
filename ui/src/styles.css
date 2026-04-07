@@ -213,24 +213,50 @@ textarea {
 .inline-label {
   font-size: 12px;
   font-weight: 600;
-  color: #7b89a5;
+  color: var(--md-sys-color-on-surface-variant);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.sidebar-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-action-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary-container);
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.sidebar-action-icon:hover {
+  filter: brightness(0.9);
+  transform: scale(1.1);
 }
 
 .archive-toggle {
   font-size: 10px;
   padding: 4px 8px;
   border-radius: 12px;
-  background: #f1f3f4;
-  color: #5f6368;
-  border: 1px solid #dadce0;
+  background: var(--md-sys-color-surface-variant);
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px solid var(--md-sys-color-outline);
 }
 
 .archive-toggle.active {
-  background: #e8f0fe;
-  color: #1a73e8;
-  border-color: #d2e3fc;
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
 }
 
 .project-section + .project-section {
@@ -612,6 +638,33 @@ textarea {
 .workspace-shell {
   min-height: 100vh;
   padding: 18px 18px 18px 10px;
+  position: relative;
+}
+
+.run-tracking-bar {
+  position: absolute;
+  top: 0;
+  left: 10px;
+  right: 18px;
+  height: 4px;
+  background: var(--md-sys-color-primary-container);
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.run-tracking-progress {
+  height: 100%;
+  width: 30%;
+  background: var(--md-sys-color-primary);
+  border-radius: 4px;
+  animation: trackingProgress 2s ease-in-out infinite;
+}
+
+@keyframes trackingProgress {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(233%); }
+  100% { transform: translateX(-100%); }
 }
 
 .workspace-main-card,
@@ -724,19 +777,36 @@ textarea {
 }
 
 .approval-inline-bar {
-  align-items: center;
-  border-bottom: 1px solid rgba(226, 232, 243, 0.8);
-  background: rgba(244, 247, 255, 0.8);
-  padding: 12px 24px;
-  justify-content: space-between;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-bottom: 1px solid var(--md-sys-color-outline);
+  background: var(--md-sys-color-surface-variant);
+  padding: 18px 24px;
 }
 
 .approval-copy {
-  min-width: 240px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #1f345e;
+}
+
+.approval-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.approval-controls input {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .approval-copy strong {
@@ -987,6 +1057,12 @@ textarea {
 .plan-step-card strong {
   display: block;
   margin-top: 8px;
+}
+
+.project-path-hint {
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-family: 'Roboto Mono', monospace;
 }
 
 .fixed-composer-shell {
