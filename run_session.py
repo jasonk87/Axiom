@@ -1409,14 +1409,12 @@ class AxiomRunManager:
 
     def _execute_subtask(self, session: dict, subtask) -> None:
         # Construct a task interpretation dynamically from the subtask state
-        from models import TaskAction, TaskInterpretation
-
         try:
             action_val = TaskAction(subtask.action)
         except ValueError:
             action_val = TaskAction.UNKNOWN
 
-        interpretation = TaskInterpretation(
+        sub_interpretation = TaskInterpretation(
             raw_task=subtask.description,
             summary=subtask.description,
             action=action_val,
@@ -1448,7 +1446,7 @@ class AxiomRunManager:
 
         plan = Planner().build_plan(
             Mode(session["mode"]),
-            interpretation,
+            sub_interpretation,
             scope_manager,
             verification,
             repo_index_summary,
@@ -1529,9 +1527,11 @@ class AxiomRunManager:
         if session.get("steering_prompts"):
             steering_prompt = session["steering_prompts"].pop(0)
             session["activity"].append(f"Reacting to steering: {steering_prompt}")
-            # Update the task interpretation to include the steering prompt
-            interpretation.raw_task = f"{interpretation.raw_task}\n\n[USER STEER]: {steering_prompt}"
-            session["task_interpretation"] = interpretation.to_dict()
+
+            # Update the ROOT task interpretation to include the steering prompt
+            root_interpretation = interpretation_from_dict(session["task_interpretation"])
+            root_interpretation.raw_task = f"{root_interpretation.raw_task}\n\n[USER STEER]: {steering_prompt}"
+            session["task_interpretation"] = root_interpretation.to_dict()
 
             # Force a replan by setting current_subtask_index to -1 and tricking the loop
             session["current_subtask_index"] = -1
@@ -1550,12 +1550,11 @@ class AxiomRunManager:
         command_policy = CommandPolicyMode(session["command_policy"])
         verification = verification_from_dict(session["verification"])
         interpretation = interpretation_from_dict(session["task_interpretation"])
-        # If it's a COMPLEX action, use the dynamic subtask interpretation we construct inside _execute_subtask
-        # Otherwise, stick to the root interpretation.
-        from models import TaskAction, TaskInterpretation
 
+        # If it's a COMPLEX action, use the dynamic subtask interpretation
+        # Otherwise, stick to the root interpretation.
         if (
-            interpretation.action == TaskAction.COMPLEX.value
+            interpretation.action == TaskAction.COMPLEX
             and interpretation.subtasks
         ):
             subtask = interpretation.subtasks[session["current_subtask_index"]]
@@ -1583,9 +1582,9 @@ class AxiomRunManager:
                 ),
                 snapshot_id=None,
             )
-        elif interpretation.action == TaskAction.COMPLEX.value:
+        elif interpretation.action == TaskAction.COMPLEX:
             # Fallback to UNKNOWN if decomposition failed or LLM was disabled
-            interpretation.action = TaskAction.UNKNOWN.value  # type: ignore
+            interpretation.action = TaskAction.UNKNOWN
 
         orchestrator = Orchestrator(project_root)
         artifact_manager = ArtifactManager(
@@ -2227,16 +2226,17 @@ class AxiomRunManager:
             next_task = session["queued_tasks"].pop(0)
             session["activity"].append(f"Starting next queued task: {next_task}")
 
-            # Update interpretation with new task
+            # Update root interpretation with new task
             # For simplicity, we reset many fields to allow Orchestrator logic to re-run
-            interpretation.raw_task = next_task
-            interpretation.summary = next_task
-            interpretation.action = TaskAction.COMPLEX # Assume complex for now
-            interpretation.subtasks = None
-            interpretation.compressed_history = None
-            interpretation.compressed_subtask_count = 0
+            root_interpretation = interpretation_from_dict(session["task_interpretation"])
+            root_interpretation.raw_task = next_task
+            root_interpretation.summary = next_task
+            root_interpretation.action = TaskAction.COMPLEX # Assume complex for now
+            root_interpretation.subtasks = None
+            root_interpretation.compressed_history = None
+            root_interpretation.compressed_subtask_count = 0
 
-            session["task_interpretation"] = interpretation.to_dict()
+            session["task_interpretation"] = root_interpretation.to_dict()
             session["status"] = RunStatus.RUNNING.value
             session["current_subtask_index"] = -1
             session["completed_subtask_indices"] = []
