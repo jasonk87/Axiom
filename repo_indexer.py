@@ -33,6 +33,7 @@ class RepoIndexer:
         python_symbols: dict[str, dict[str, list[str]]] = {}
         protected_files_indexed: list[str] = []
         notes: list[str] = []
+        reverse_dependencies: dict[str, list[str]] = {}
 
         import threading
 
@@ -116,6 +117,16 @@ class RepoIndexer:
                 }
             )
 
+        # Build reverse dependencies map
+        for relative_path, symbols in python_symbols.items():
+            for imported_module in symbols.get("imports", []):
+                # Convert module name to potential file path (e.g. models -> models.py)
+                # This is a simple approximation
+                potential_file = imported_module.replace(".", "/") + ".py"
+                if potential_file not in reverse_dependencies:
+                    reverse_dependencies[potential_file] = []
+                reverse_dependencies[potential_file].append(relative_path)
+
         if not files:
             notes.append("No readable files were indexed under the current scope.")
         if self.scope_manager.describe_effective_scope()["mode"] == "selected_paths":
@@ -160,6 +171,7 @@ class RepoIndexer:
             python_symbols=python_symbols,
             protected_files_indexed=sorted(set(protected_files_indexed)),
             notes=notes,
+            reverse_dependencies=reverse_dependencies,
         )
         payload = {
             "summary": summary.to_dict(),

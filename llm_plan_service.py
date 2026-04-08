@@ -50,7 +50,8 @@ class LocalLLMPlanService:
             "Each step must contain exactly these keys: "
             "id, type, title, description, dependencies, scope_hint, expected_outcome, phase, risk_hint, approval_hint.\n"
             "Use type in {discovery, execution, verification}.\n"
-            "Be honest about uncertainty. If the repo context is incomplete, add discovery steps instead of pretending certainty."
+            "Be honest about uncertainty. If the repo context is incomplete, add discovery steps instead of pretending certainty.\n"
+            "CRITICAL: If the target path has reverse dependencies (files that import it) listed in repo_index_summary, you MUST add specific verification steps to ensure those dependent files are not broken by the proposed changes."
         )
         structured_context = {
             "task": {

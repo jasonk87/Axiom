@@ -84,6 +84,37 @@ class LocalVectorStore:
 
         return chunks
 
+    def _chunk_python_ast(self, text: str) -> list[str]:
+        import ast
+        try:
+            tree = ast.parse(text)
+        except Exception:
+            return self._chunk_text(text)
+
+        chunks = []
+        lines = text.splitlines()
+
+        def get_source_segment(node):
+            if not hasattr(node, "lineno") or not hasattr(node, "end_lineno"):
+                return None
+            return "\n".join(lines[node.lineno - 1:node.end_lineno])
+
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                segment = get_source_segment(node)
+                if segment:
+                    chunks.append(segment)
+            else:
+                # Top level imports or expressions, we could group them, but for now we skip or chunk them simply
+                segment = get_source_segment(node)
+                if segment and len(segment) > 50: # Only bother with substantial top-level statements
+                    chunks.append(segment)
+
+        if not chunks:
+            return self._chunk_text(text)
+
+        return chunks
+
     @staticmethod
     def _cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
         dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
@@ -107,7 +138,11 @@ class LocalVectorStore:
         self.documents = [doc for doc in self.documents if doc["path"] != file_path]
         self.file_hashes[file_path] = content_hash
 
-        chunks = self._chunk_text(content)
+        if file_path.endswith(".py"):
+            chunks = self._chunk_python_ast(content)
+        else:
+            chunks = self._chunk_text(content)
+
         for i, chunk in enumerate(chunks):
             if not chunk:
                 continue

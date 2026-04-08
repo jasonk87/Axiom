@@ -65,7 +65,15 @@ class Planner:
     ) -> Plan:
         target = interpretation.target_path or "<unknown>"
         repo_note = self._repo_note_for_target(target, repo_index_summary)
-        return Plan(
+
+        dependent_files = []
+        if repo_index_summary and repo_index_summary.generated:
+            # Check if any files import this target file
+            dependent_files = repo_index_summary.reverse_dependencies.get(target, [])
+            if dependent_files:
+                repo_note += f" CRITICAL: This file has {len(dependent_files)} known dependent files (e.g. {', '.join(dependent_files[:3])})."
+
+        plan = Plan(
             steps=[
                 PlanStep(
                     id="step-1",
@@ -112,6 +120,24 @@ class Planner:
                 ),
             ]
         )
+
+        if dependent_files:
+            plan.steps.append(
+                PlanStep(
+                    id="step-4",
+                    step_type=StepType.VERIFICATION,
+                    title="Verify Dependent Files",
+                    description=f"Check the {len(dependent_files)} known dependent files (e.g. {', '.join(dependent_files[:3])}) to ensure the modifications to '{target}' have not broken their imports or expectations.",
+                    dependencies=["step-3"],
+                    scope_hint="dependent files",
+                    expected_outcome="Dependent files still function correctly and import logic is unbroken.",
+                    phase="verify",
+                    risk_hint="medium",
+                    approval_hint="included_in_current_phase",
+                )
+            )
+
+        return plan
 
     def _plan_for_command(
         self,

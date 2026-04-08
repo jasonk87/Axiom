@@ -194,6 +194,7 @@ class RepoIndexSummary:
     protected_files_indexed: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     semantic_search_results: list[dict[str, Any]] = field(default_factory=list)
+    reverse_dependencies: dict[str, list[str]] = field(default_factory=dict)
     artifact_reference: ArtifactReference | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -209,6 +210,7 @@ class RepoIndexSummary:
             "protected_files_indexed": self.protected_files_indexed,
             "notes": self.notes,
             "semantic_search_results": self.semantic_search_results,
+            "reverse_dependencies": self.reverse_dependencies,
             "artifact_reference": (
                 self.artifact_reference.to_dict() if self.artifact_reference else None
             ),
