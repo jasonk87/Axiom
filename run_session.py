@@ -6,11 +6,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, Lock, Thread
 import time
+import traceback
 from uuid import uuid4
 
 from artifact_manager import ArtifactManager
 from llm_client import LLMSettings
 from llm_settings_manager import LLMSettingsManager
+from llm_eval_service import LocalLLMEvalService
+from planner import Planner
+from vector_store import LocalVectorStore
 from models import (
     ApprovalMode,
     ArtifactReference,
@@ -1235,8 +1239,6 @@ class AxiomRunManager:
                         )
 
                         if llm_settings.enabled and llm_settings.review_enabled:
-                            from llm_eval_service import LocalLLMEvalService
-
                             eval_service = LocalLLMEvalService(settings=llm_settings)
                             project_root = session["project_root"]
                             artifact_manager = ArtifactManager(
@@ -1336,8 +1338,6 @@ class AxiomRunManager:
                 session["next_phase_index"] += 1
                 self._persist_session(session)
         except Exception as error:
-            import traceback
-
             session["final_execution_result"] = ExecutionResult(
                 success=False,
                 message=str(error),
@@ -1456,8 +1456,6 @@ class AxiomRunManager:
         )
 
         # Convert into a fake Plan and execution payload to leverage existing logic
-        from planner import Planner
-
         project_root = session["project_root"]
         scope_manager = ScopeManager(
             project_root,
@@ -2276,9 +2274,7 @@ class AxiomRunManager:
                     new_memories = getattr(updated_memory, "_new_discrete_memories", [])
                     if new_memories and getattr(llm_settings, "embedding_model", None):
                         try:
-                            from vector_store import LocalVectorStore
                             vector_store = LocalVectorStore(project_root, llm_settings)
-                            from uuid import uuid4
                             for memory_text in new_memories:
                                 vector_store.add_memory(uuid4().hex, memory_text)
                             vector_store.sync_index()
