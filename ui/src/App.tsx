@@ -25,6 +25,7 @@ import {
 } from "./api";
 import { InspectModal } from "./components/InspectModal";
 import { SessionStepCard, type SessionStepStatus } from "./components/SessionStepCard";
+import { ChevronLeft, ChevronRight, Plus, Archive, ArchiveRestore, FolderPlus, Settings, Settings2 } from "lucide-react";
 import { useLocalStorageState } from "./hooks/useLocalStorageState";
 import type { AxiomProject, AxiomSession, LLMSettings, LLMStructuredSummary, PrepareRunRequest, PreviewFileChange } from "./types";
 
@@ -1126,16 +1127,16 @@ export default function App() {
             <div className="brand-mark">A</div>
             {!layout.leftCollapsed ? <div className="brand-wordmark">Axiom</div> : null}
             <button className="ghost-button" onClick={() => setLayout((current) => ({ ...current, leftCollapsed: !current.leftCollapsed }))}>
-              {layout.leftCollapsed ? ">" : "<"}
+              {layout.leftCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
             </button>
           </div>
           {!layout.leftCollapsed ? (
             <>
-              <button className="new-task-button" onClick={handleNewTask}>+ New Task</button>
+              <button className="new-task-button" onClick={handleNewTask}><Plus size={16} /> New Task</button>
             </>
           ) : (
             <>
-              <button className="mini-icon-button" onClick={handleNewTask}>+</button>
+              <button className="mini-icon-button" onClick={handleNewTask}><Plus size={16} /></button>
             </>
           )}
         </div>
@@ -1145,13 +1146,13 @@ export default function App() {
             <div className="sidebar-section-header">
               <div className="sidebar-section-heading">Projects</div>
               <div className="sidebar-section-actions">
-                <button className="sidebar-action-icon" onClick={openProjectPicker} title="Add Project Folder">+</button>
+                <button className="sidebar-action-icon" onClick={openProjectPicker} title="Add Project Folder"><FolderPlus size={16} /></button>
                 <button
                   className={`archive-toggle ${showArchived ? "active" : ""}`}
                   onClick={() => setShowArchived(!showArchived)}
                   title={showArchived ? "Hide archived sessions" : "Show archived sessions"}
                 >
-                  {showArchived ? "Showing Archived" : "Show Archived"}
+                  {showArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                 </button>
               </div>
             </div>
@@ -1201,7 +1202,7 @@ export default function App() {
                         }}
                         title={run.archived ? "Unarchive session" : "Archive session"}
                       >
-                        {run.archived ? "↺" : "×"}
+                        {run.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                       </button>
                     </div>
                   ))}
@@ -1256,7 +1257,7 @@ export default function App() {
               {session?.pending_phase ? <span className="status-chip pending">phase {session.pending_phase}</span> : null}
               {previewChanges ? <span className="status-chip">preview on</span> : null}
               <button className="status-chip status-chip-button" onClick={() => setAiSettingsOpen(true)}>
-                {modelChipLabel(llmSettings)}
+                <Settings size={14} /> {modelChipLabel(llmSettings)}
               </button>
             </div>
           </header>
@@ -1353,7 +1354,7 @@ export default function App() {
 
           <div className="composer-shell fixed-composer-shell">
             <button className="advanced-toggle-button" onClick={() => setLayout((current) => ({ ...current, advancedOpen: !current.advancedOpen }))}>
-              {layout.advancedOpen ? "Hide advanced controls" : "Advanced controls"}
+              <Settings2 size={14} /> {layout.advancedOpen ? "Hide advanced controls" : "Advanced controls"}
             </button>
             {layout.advancedOpen ? (
               <div className="advanced-control-panel">
