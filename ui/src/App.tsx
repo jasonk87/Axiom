@@ -687,7 +687,7 @@ export default function App() {
         hasArchived: recentRuns.some((run) => run.project_id === project.id && run.archived),
       }))
       .sort((a, b) => (b.runs[0]?.updated_at ?? b.root).localeCompare(a.runs[0]?.updated_at ?? a.root));
-  }, [projects, recentRuns]);
+  }, [projects, recentRuns, showArchived]);
   const recentProjects = useMemo(() => groupedProjects.slice(0, 6), [groupedProjects]);
 
   function buildLLMStreamSteps(summary: LLMStructuredSummary | null | undefined, kind: "plan" | "review"): StreamStep[] {
