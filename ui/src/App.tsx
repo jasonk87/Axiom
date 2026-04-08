@@ -136,7 +136,7 @@ function inferRunAppTask(session: AxiomSession | null): string {
 }
 
 function inferCommitTask(): string {
-  return 'Run command git add -A && git commit -m "Jules update"';
+  return 'Run command git add -A && git commit -m "Axiom update"';
 }
 
 function previewSummary(change: PreviewFileChange): string {
@@ -706,14 +706,14 @@ export default function App() {
           ? "Applying project context..."
           : kind === "plan"
             ? event.stage === "query_model"
-              ? "Asking Jules for plan..."
+              ? "Asking Axiom for plan..."
               : event.stage === "validate_response"
                 ? "Validating plan response..."
                 : event.stage === "retry_output"
                   ? `Retrying plan output (attempt ${event.attempt})...`
                   : event.stage === "fallback"
                     ? "Using system fallback plan..."
-                    : "Jules planning"
+                    : "Axiom planning"
             : event.stage === "query_model"
               ? "Reviewing plan for overbuild and scope drift..."
               : event.stage === "validate_response"
@@ -722,7 +722,7 @@ export default function App() {
                   ? `Retrying review output (attempt ${event.attempt})...`
                   : event.stage === "fallback"
                     ? "Review fallback used..."
-                    : "Jules review";
+                    : "Axiom review";
       return {
         id: `${kind}-llm-${index}`,
         key: namespacedStepKey(`${kind}-llm-${index}`),
@@ -820,7 +820,7 @@ export default function App() {
         id: "decomposition",
         key: namespacedStepKey("decomposition"),
         title: "Guiding Features & Subtasks",
-        summary: `Jules is working through ${session.subtasks.length} subtasks to implement your request.`,
+        summary: `Axiom is working through ${session.subtasks.length} subtasks to implement your request.`,
         status: "complete",
         detail: (
           <div className="plan-step-list">
@@ -981,7 +981,7 @@ export default function App() {
       summary:
         commandResults.length > 0
           ? `${commandResults.length} command result(s) captured inline for this task.`
-          : "Command output will appear inline here when Jules runs verification or shell work.",
+          : "Command output will appear inline here when Axiom runs verification or shell work.",
       status: commandStepStatus,
       detail: (
         <div className="command-stack">
@@ -1046,7 +1046,7 @@ export default function App() {
       key: namespacedStepKey("review"),
       title: hasIssue ? "Reviewing failure state..." : "Reviewing changes...",
       summary: hasIssue
-        ? "Jules captured failure, repair, or recovery context for review."
+        ? "Axiom captured failure, repair, or recovery context for review."
         : "Checking whether the result matches intent without scope drift.",
       status: hasIssue ? "warning" : session.final_execution_result ? "complete" : "pending",
       detail: (
@@ -1123,8 +1123,8 @@ export default function App() {
       <aside className={layout.leftCollapsed ? "session-sidebar collapsed" : "session-sidebar"}>
         <div className="sidebar-top">
           <div className="brand-row">
-            <div className="brand-mark">J</div>
-            {!layout.leftCollapsed ? <div className="brand-wordmark">Jules</div> : null}
+            <div className="brand-mark">A</div>
+            {!layout.leftCollapsed ? <div className="brand-wordmark">Axiom</div> : null}
             <button className="ghost-button" onClick={() => setLayout((current) => ({ ...current, leftCollapsed: !current.leftCollapsed }))}>
               {layout.leftCollapsed ? ">" : "<"}
             </button>
@@ -1158,7 +1158,7 @@ export default function App() {
             {groupedProjects.length === 0 ? (
               <div className="sidebar-empty-state">
                 <strong>Add a project root to get started</strong>
-                <p>Jules sessions live inside real rooted folders on your local machine.</p>
+                <p>Axiom sessions live inside real rooted folders on your local machine.</p>
                 <button className="ghost-button" onClick={openProjectPicker}>Add Project Root</button>
               </div>
             ) : null}
@@ -1237,7 +1237,7 @@ export default function App() {
               <div>
                 <h1>
                   {session?.task_interpretation?.summary ??
-                    (emptyProjectState ? "Open a project folder to begin" : "Welcome to Jules")}
+                    (emptyProjectState ? "Open a project folder to begin" : "Welcome to Axiom")}
                 </h1>
                 <p>
                   {session?.task_interpretation?.raw_task ??
@@ -1301,7 +1301,7 @@ export default function App() {
             {emptyProjectState ? (
               <div className="empty-stream-state">
                 <h2>Add a project root to begin</h2>
-                <p>Jules organizes sessions under real project roots on your machine. Add one to start a task.</p>
+                <p>Axiom organizes sessions under real project roots on your machine. Add one to start a task.</p>
                 <button className="primary-button" onClick={openProjectPicker}>Add Project Root</button>
               </div>
             ) : visibleSteps.length === 0 ? (
@@ -1309,7 +1309,7 @@ export default function App() {
                 <h2>{busy ? "Waking up the session..." : noProjectSelected ? "Select a project to continue" : "Session-first by default"}</h2>
                 <p>
                   {busy
-                    ? "Jules is preparing workspace context and the first stream events."
+                    ? "Axiom is preparing workspace context and the first stream events."
                     : noProjectSelected
                       ? "Choose a project from the sidebar, then start a new task in that rooted workspace."
                       : "The stream will stay alive here, even before a task is running. Start with the bottom input bar."}
@@ -1438,8 +1438,8 @@ export default function App() {
                 placeholder={
                     activeProject
                         ? (session && isActiveStatus(session.status))
-                            ? "Enter to queue, Ctrl+Enter to steer Jules..."
-                            : "Ask Jules to build something..."
+                            ? "Enter to queue, Ctrl+Enter to steer Axiom..."
+                            : "Ask Axiom to build something..."
                         : "Open a project folder to begin"
                 }
                 disabled={!activeProject}
@@ -1457,7 +1457,7 @@ export default function App() {
                     className="steer-button"
                     onClick={handleSteerRun}
                     disabled={busy || !task.trim()}
-                    title="Steer Jules immediately"
+                    title="Steer Axiom immediately"
                 >
                     Steer
                 </button>
@@ -1518,7 +1518,7 @@ export default function App() {
                   </label>
                 </div>
                 <div className="project-picker-actions">
-                  <span className="detail-note">Jules will index this root and allow you to create task-specific sessions inside it.</span>
+                  <span className="detail-note">Axiom will index this root and allow you to create task-specific sessions inside it.</span>
                   <button className="primary-button" onClick={handleCreateProject} disabled={busy || !projectPath.trim()}>
                     Add Project Root
                   </button>

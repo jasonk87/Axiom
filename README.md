@@ -11,7 +11,7 @@ Phase 5 strengthens the foundation with:
 - snapshots for rollback
 - scoped file access
 - protected write-blocked paths
-- lightweight repo awareness
+- lightweight repo awareness and **Local RAG (Semantic Search)**
 - artifact persistence for plans, results, indexes, previews, and command logs
 - patch-style change preview before execution
 - phased execution reporting
@@ -20,6 +20,7 @@ Phase 5 strengthens the foundation with:
 - bounded repair planning and one-shot repair attempts
 - optional local LLM plan generation through Ollama with strict validation and bounded retries
 - optional local LLM plan review / self-critique with the same validation and bounded retry discipline
+- **Asynchronous interaction model** with support for "Steer" and "Queue"
 
 This project is not a chatbot shell. It is a controlled task system.
 
@@ -31,21 +32,36 @@ Axiom/
 |-- command_policy.py
 |-- context_builder.py
 |-- failure_classifier.py
+|-- llm_client.py
+|-- llm_compress_service.py
+|-- llm_decompose_service.py
+|-- llm_eval_service.py
+|-- llm_implement_service.py
+|-- llm_plan_service.py
+|-- llm_replan_service.py
+|-- llm_retry.py
+|-- llm_review_service.py
+|-- llm_settings_manager.py
 |-- main.py
-|-- models.py
 |-- mode_manager.py
+|-- models.py
 |-- orchestrator.py
 |-- permission_manager.py
+|-- phase_policy.py
 |-- planner.py
 |-- preview_manager.py
+|-- project_manager.py
 |-- repair_manager.py
 |-- repo_indexer.py
+|-- run_session.py
 |-- scope_manager.py
 |-- snapshot_manager.py
 |-- start_axiom.py
+|-- structured_output.py
 |-- terminal_runner.py
 |-- ui_server.py
 |-- ui/
+|-- vector_store.py
 |-- verification_manager.py
 |-- workspace_manager.py
 `-- README.md
@@ -54,10 +70,9 @@ Axiom/
 ## Requirements
 
 - Python 3.10+
+- Node.js & npm (for the UI shell)
 
-No third-party dependencies are required for this phase.
-
-For optional local model planning, Axiom can also call a locally running Ollama instance. That integration is disabled by default and only activates when explicitly enabled through environment variables.
+No third-party vector databases are required. Axiom uses a native Python local RAG implementation with JSON storage.
 
 ## Modes
 
@@ -108,188 +123,73 @@ Command policy is enforced programmatically through `CommandPolicy`.
 
 Every workspace file write still checks both mode permissions and scope/protection rules. Safety does not depend on prompt wording.
 
-## Lightweight Repo Indexing
+## Repo Indexing & Local RAG
 
 Repo indexing is optional and read-only.
 
-When enabled, Axiom collects lightweight structure data such as:
+When enabled, Axiom collects lightweight structure data (file paths, extensions, top-level directories, entry/config/test files, and Python symbols).
 
-- file paths
-- file extensions
-- top-level directories
-- likely entry files
-- likely config files
-- likely test files
-- lightweight Python symbols using `ast` where practical
+### Local RAG (Semantic Search)
+
+If `AXIOM_LLM_ENABLED` is set and an embedding model is configured, Axiom builds a local vector store for the project. This allows:
+
+- Semantic search across the codebase during planning.
+- Retrieval of relevant code snippets to provide better context for complex tasks.
+- Asynchronous indexing to prevent blocking the main thread.
 
 Repo indexing:
-
 - respects active scope
-- may include protected readable paths
-- marks protected indexed files clearly
-- stores the full index as an artifact
-- passes only a compact summary into planning and task context
+- stores the full index and vector store as artifacts under `.axiom/`
+- passes a compact summary and relevant search results into planning
 
-This phase does not build a semantic graph, call graph, or deep dependency model.
+## UI Shell
 
-## Artifact Storage
+Axiom includes a Material Design 3 UI shell built with React and TypeScript.
 
-Axiom stores system artifacts under:
+### One-Command Launch
 
-```text
-.axiom/artifacts/<run_id>/
+For normal local development:
+
+```bash
+python start_axiom.py
 ```
 
-Artifacts are kept separate from normal workspace mutations.
+### UI Features
 
-Examples include:
-
-- `repo_index_<timestamp>_<suffix>.json`
-- `plan_<timestamp>_<suffix>.json`
-- `preview_<timestamp>_<suffix>.json`
-- `failure_report_<timestamp>_<suffix>.json`
-- `repair_plan_<timestamp>_<suffix>.json`
-- `repair_result_<timestamp>_<suffix>.json`
-- `command_log_<timestamp>_<suffix>.json`
-- `result_<timestamp>_<suffix>.json`
-- `llm_attempt_<timestamp>_<suffix>.json`
-- `llm_validation_<timestamp>_<suffix>.json`
-
-## Local LLM Plan Validation
-
-Axiom can optionally ask a local Ollama model to propose a structured plan object before execution planning continues.
-
-This layer is intentionally narrow:
-
-- the local model is only used for structured plan generation in this phase
-- the local model may optionally run a second advisory review pass over the accepted plan
-- all returned output is validated before use
-- malformed or incomplete output is retried with explicit correction feedback
-- retries are bounded
-- if the model still fails, Axiom records the failure clearly and falls back to the built-in planner
-- review fallback never blocks or rewrites the accepted plan automatically in this phase
-
-The model is never the authority. System rules for approval, scope, protected paths, command policy, verification, and cancellation remain backend-enforced.
-
-### Supported Validation Checks
-
-- JSON parseability
-- top-level object shape
-- required keys present
-- field types correct
-- disallowed extra structure rejected for plan steps
-- constrained verdict and severity enums for advisory review output
+- **Project Management**: Add and switch between multiple project roots via the sidebar.
+- **Asynchronous Interaction**:
+    - **Steer**: Inject feedback or instructions into an active task (Ctrl+Enter).
+    - **Queue**: Sequence multiple tasks for execution (Enter).
+- **Session History**: Hierarchical organization of sessions grouped by project.
+- **Live Feedback**: High-visibility animated tracking bar for active runs.
+- **Plan Inspection**: Review generated plans as "Guiding Features & Subtasks" with status badges.
+- **Artifact Browser**: Inspect step results, command output, and repair summaries.
 
 ### Local LLM Configuration
 
-Set these environment variables to enable the local model path:
+Configure these environment variables for Ollama integration:
 
 - `AXIOM_LLM_ENABLED=true`
 - `AXIOM_LLM_REVIEW_ENABLED=true`
 - `AXIOM_LLM_PROVIDER=ollama`
 - `AXIOM_LLM_BASE_URL=http://127.0.0.1:11434`
 - `AXIOM_LLM_MODEL=llama3.2:3b`
+- `AXIOM_LLM_EMBEDDING_MODEL=nomic-embed-text`
+- `AXIOM_LLM_COMPRESSION_ENABLED=true`
+- `AXIOM_LLM_COMPRESSION_THRESHOLD=5`
 - `AXIOM_LLM_TIMEOUT_SECONDS=20`
 - `AXIOM_LLM_RETRY_LIMIT=2`
 - `AXIOM_LLM_TEMPERATURE=0.1`
 
-If `AXIOM_LLM_ENABLED` is not set, Axiom continues using only the built-in deterministic planner.
-
-## Planning And Execution Structure
-
-Generated plans can now be grouped into phases such as:
-
-- `understand`
-- `modify`
-- `verify`
-- `repair_follow_up`
-
-Each plan step includes:
-
-- `id`
-- `type`
-- `title`
-- `description`
-- `dependencies`
-- `scope_hint`
-- `expected_outcome`
-- `phase`
-- `risk_hint`
-- `approval_hint`
-
-Execution remains sequential. Axiom reports both phase-level and step-level results, including where execution stopped or failed.
-
-## Change Preview
-
-When `--preview-changes` is enabled for an IMPLEMENT run, Axiom produces a read-only preview before approval.
-
-Preview behavior:
-
-- shows intended file creates and writes when they are known
-- shows intended command executions
-- prefers a concise unified-diff-style preview for direct file writes
-- labels blocked writes when scope or protected-path rules would prevent the write
-- stores full preview details as an artifact instead of dumping everything inline
-
-Preview never modifies project files and does not replace plan approval.
-
 ## Verification Profiles
 
-### `none`
-
-- no post-execution verification runs
-
-### `basic`
-
-- verifies direct file-write outcomes using built-in existence and content checks
-- verifies command success for direct command execution
-- may also run explicitly configured verification commands
-- records results against the verification step and phase in the run summary
-
-### `commands_only`
-
-- runs only explicit user-provided verification commands
-- allowed only in `implement` mode
-- each command result is captured structurally and stored as an artifact
+- `none`: No post-execution verification runs.
+- `basic`: Verifies direct file-write outcomes and command success.
+- `commands_only`: Runs only explicit user-provided verification commands.
 
 ## Failure Handling And Repair
 
-When IMPLEMENT execution fails, Axiom now:
-
-1. classifies the failure
-2. writes a failure report artifact
-3. generates a narrow repair plan
-4. optionally performs at most one automatic repair attempt
-5. records the final outcome clearly
-
-Supported failure categories include:
-
-- `command_execution_failure`
-- `verification_failure`
-- `write_policy_block`
-- `scope_violation`
-- `protected_path_violation`
-- `parse_or_analysis_failure`
-- `command_policy_block`
-- `unknown_failure`
-
-Important repair behavior:
-
-- repair never broadens scope or permissions
-- policy, scope, and protected-path violations are reported rather than bypassed
-- automatic repair is bounded to one attempt
-- if repair fails, Axiom stops and reports clearly
-
-## Supported Task Handling
-
-The foundation safely plans any task, but direct execution remains intentionally narrow:
-
-- analyze a file in `conversation` mode
-- generate a structured plan in `plan` mode
-- create a file in `implement` mode
-- modify or overwrite a file in `implement` mode
-- run a shell command in `implement` mode
-- restore a snapshot in `implement` mode
+When IMPLEMENT execution fails, Axiom classifies the failure (e.g., `command_execution_failure`, `verification_failure`, `scope_violation`) and can optionally perform one automatic repair attempt if `--auto-repair yes` is set.
 
 ## CLI Usage
 
@@ -305,182 +205,18 @@ python main.py --project /path/to/project --mode plan --build-repo-index --task 
 python main.py --project /path/to/project --mode implement --command-policy safe --task "Run command rm -rf dist"
 ```
 
-### Implement mode with preview before approval
+### CLI Options
 
-```bash
-python main.py --project /path/to/project --mode implement --preview-changes --task "Create a file named docs/demo.txt with hello world"
-```
-
-### Implement mode with file overwrite
-
-```bash
-python main.py --project /path/to/project --mode implement --scope docs --preview-changes --verify-profile basic --task "Modify docs/demo.txt to contain: hello world"
-```
-
-### Implement mode with phased approval
-
-```bash
-python main.py --project /path/to/project --mode implement --approval-mode phased --task "Create a file named docs/demo.txt with hello world"
-```
-
-### Implement mode with auto-repair enabled
-
-```bash
-python main.py --project /path/to/project --mode implement --auto-repair yes --task "Run command python flaky.py"
-```
-
-### Implement mode with command-based verification
-
-```bash
-python main.py --project /path/to/project --mode implement --verify-profile commands_only --verify-command "python --version" --task "Run command python --version"
-```
-
-## UI Shell
-
-Axiom also includes a first local UI shell built with React and TypeScript.
-
-The UI is a thin layer over the existing Python backend. It does not reimplement the orchestrator. It uses a local bridge server in [ui_server.py](C:\Users\Owner\Desktop\Axiom\ui_server.py) and the React app in [ui](C:\Users\Owner\Desktop\Axiom\ui).
-
-### One-Command Launch
-
-For normal local development, start Axiom with one command:
-
-```bash
-python start_axiom.py
-```
-
-This launcher:
-
-- starts the Python backend bridge
-- starts the Vite frontend dev server
-- waits until both are reachable
-- opens the browser automatically
-- streams prefixed logs
-- shuts both processes down cleanly on `Ctrl+C`
-
-Useful launcher variants:
-
-```bash
-python start_axiom.py --no-browser
-python start_axiom.py --backend-port 9000 --frontend-port 5174
-python start_axiom.py --mode built
-```
-
-### Launch The UI In Development
-
-The manual development flow still works if you need it:
-
-1. Start the Python bridge server:
-
-```bash
-python ui_server.py --host 127.0.0.1 --port 8765
-```
-
-2. In a second terminal, start the React frontend:
-
-```bash
-cd ui
-npm install
-npm run dev
-```
-
-3. Open the URL printed by Vite, usually:
-
-```text
-http://127.0.0.1:5173
-```
-
-### Build The UI For Static Serving
-
-```bash
-cd ui
-npm install
-npm run build
-```
-
-After building, the Python bridge server will also serve the compiled frontend from `ui/dist`.
-
-### Launch Built Mode
-
-If `ui/dist` already exists, you can run the backend as a single static server:
-
-```bash
-python start_axiom.py --mode built
-```
-
-Or directly:
-
-```bash
-python ui_server.py --host 127.0.0.1 --port 8765
-```
-
-In built mode, only the Python server is needed because it serves the compiled frontend assets from `ui/dist`.
-
-### UI Capabilities In This First Shell
-
-- choose a project path
-- load a file tree
-- set scope and protected paths
-- enter a task and mode/settings
-- prepare an IMPLEMENT run without auto-executing it
-- inspect the generated plan and preview before approval
-- approve the overall plan
-- approve phases one by one when phased approval is enabled
-- observe local-model planning, validation, retry, and fallback activity directly in the session stream when enabled
-- observe advisory plan review, findings, retries, and fallback directly in the session stream when review is enabled
-- inspect step results, phase progress, artifacts, repair/failure summaries, and command output
-
-## CLI Options
-
-- `--scope path1,path2,path3`: optional files or folders that define the task scope
-- `--protect path1,path2,path3`: optional files or folders that are always write-protected
-- `--verify-profile none|basic|commands_only`: post-execution verification strategy
-- `--verify-command "..."`: explicit verification command, repeat the flag for multiple commands
-- `--build-repo-index`: build a lightweight read-only repo index for the current run
-- `--command-policy permissive|safe`: command policy mode for IMPLEMENT command execution
-- `--preview-changes`: show a change preview before plan approval
-- `--approval-mode normal|phased`: approve once for the whole run or before each phase in IMPLEMENT mode
-- `--auto-repair yes|no`: allow at most one automatic repair attempt after an IMPLEMENT failure
-
-## Output
-
-Every task returns structured JSON containing:
-
-- task interpretation
-- selected mode
-- approval mode
-- command policy
-- effective scope
-- protected paths
-- verification profile
-- context package
-- repo index summary
-- change preview
-- plan
-- phase results
-- step results
-- blocked action attempts
-- files read
-- files modified
-- commands run
-- artifact references
-- initial execution result
-- failure classification
-- repair summary
-- final execution result
-- snapshot reference
-
-Large raw data stays in artifacts. The main task result keeps concise summaries and references to stored artifacts.
+- `--scope path1,path2`: define task scope
+- `--protect path1,path2`: write-protected paths
+- `--verify-profile none|basic|commands_only`: verification strategy
+- `--verify-command "..."`: explicit verification command
+- `--build-repo-index`: build lightweight repo index
+- `--command-policy permissive|safe`: command policy mode
+- `--preview-changes`: show change preview before approval
+- `--approval-mode normal|phased`: approval behavior
+- `--auto-repair yes|no`: allow automatic repair attempt
 
 ## Design Notes
 
-This phase intentionally avoids:
-
-- persistent project memory
-- subagents
-- parallel execution
-- heavy semantic analysis
-- true sandboxing
-- GUI work
-
-One known limitation remains: shell commands may still have side effects outside the workspace manager, so scope and protected-path enforcement currently apply most strongly to Axiom-managed file operations, repo indexing, repair writes, preview checks, and snapshot restore rather than arbitrary shell behavior.
+This phase focuses on a "gated" workflow where the system proposes actions and the user approves them. By combining mandatory planning, scoped access, and local LLM validation, Axiom provides a trustworthy autonomous environment.
