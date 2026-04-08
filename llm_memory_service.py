@@ -37,10 +37,11 @@ class LocalLLMMemoryService:
         system_instruction = (
             "You are an AI assistant tasked with updating the project memory ledger.\n"
             "Return only JSON.\n"
-            'The top-level object must have exactly these keys: "project_summary" (string), "recent_context" (string), and "known_commands" (list of strings).\n'
+            'The top-level object must have exactly these keys: "project_summary" (string), "recent_context" (string), "known_commands" (list of strings), and "new_discrete_memories" (list of strings).\n'
             "Update the summary with any high-level architectural knowledge gained.\n"
             "Update the recent context to reflect the latest completed task.\n"
-            "Add any new, useful commands to known_commands."
+            "Add any new, useful commands to known_commands.\n"
+            "For 'new_discrete_memories', output a list of individual, self-contained sentences describing distinct architectural decisions, important bug fixes, or key context learned during this task. These will be embedded for semantic search later."
         )
 
         structured_context = {
@@ -89,6 +90,14 @@ class LocalLLMMemoryService:
                         path="known_commands",
                     )
                 )
+            if "new_discrete_memories" not in payload:
+                issues.append(
+                    LLMValidationIssue(
+                        code="missing_field",
+                        message="Missing 'new_discrete_memories'",
+                        path="new_discrete_memories",
+                    )
+                )
             return issues
 
         result = engine.generate_structured_output(
@@ -105,9 +114,12 @@ class LocalLLMMemoryService:
         if result.payload is None:
             return None, result.summary
 
+        # We temporarily inject new_discrete_memories into the returned memory context for processing by the caller
         new_memory = ProjectMemoryContext(
             summary=result.payload.get("project_summary", current_memory.summary),
             recent_context=result.payload.get("recent_context", current_memory.recent_context),
             known_commands=result.payload.get("known_commands", current_memory.known_commands),
         )
+        # Hacky but effective: attach to object, though not in dataclass definition
+        setattr(new_memory, "_new_discrete_memories", result.payload.get("new_discrete_memories", []))
         return new_memory, result.summary

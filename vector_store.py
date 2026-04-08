@@ -40,6 +40,33 @@ class LocalVectorStore:
             encoding="utf-8",
         )
 
+    def add_memory(self, memory_id: str, content: str) -> None:
+        """Embed and store a memory entry."""
+        import hashlib
+
+        # Similar to document but with a specific prefix to distinguish
+        path = f"memory://{memory_id}"
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+        if self.file_hashes.get(path) == content_hash:
+            return
+
+        self.documents = [doc for doc in self.documents if doc["path"] != path]
+        self.file_hashes[path] = content_hash
+
+        try:
+            embedding = self.provider.embed(content)
+            self.documents.append(
+                {
+                    "path": path,
+                    "chunk_index": 0,
+                    "content": content,
+                    "embedding": embedding,
+                }
+            )
+        except LLMProviderError as e:
+            print(f"[VectorStore] Failed to embed memory {memory_id}: {e}")
+
     def _chunk_text(self, text: str, max_chunk_size: int = 1500) -> list[str]:
         # Very simple chunking by paragraphs, keeping chunks under max_chunk_size
         paragraphs = text.split("\n\n")
@@ -102,7 +129,7 @@ class LocalVectorStore:
         """Persist changes to disk."""
         self._save_index()
 
-    def search(self, query: str, top_k: int = 3) -> list[dict[str, Any]]:
+    def search(self, query: str, top_k: int = 3, filter_prefix: str | None = None) -> list[dict[str, Any]]:
         """Search the vector store using cosine similarity."""
         if not self.documents:
             return []
@@ -115,6 +142,8 @@ class LocalVectorStore:
 
         results = []
         for doc in self.documents:
+            if filter_prefix and not doc["path"].startswith(filter_prefix):
+                continue
             similarity = self._cosine_similarity(query_embedding, doc["embedding"])
             results.append(
                 {
