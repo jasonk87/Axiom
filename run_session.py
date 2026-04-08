@@ -44,6 +44,7 @@ from models import (
 from llm_compress_service import LocalLLMCompressService
 from llm_decompose_service import LocalLLMDecomposeService
 from llm_implement_service import LocalLLMImplementService
+from llm_memory_service import LocalLLMMemoryService
 from llm_replan_service import LocalLLMReplanService
 from orchestrator import Orchestrator
 from phase_policy import classify_plan_phases
@@ -2220,6 +2221,41 @@ class AxiomRunManager:
             if result.final_execution_result.success
             else "Execution ended with a failure summary."
         )
+
+        if result.final_execution_result.success and llm_settings.enabled:
+            try:
+                memory_service = LocalLLMMemoryService(settings=llm_settings)
+
+                execution_summary = f"Task: {interpretation.summary}\nOutcome: {result.final_execution_result.message}"
+                if result.final_execution_result.details:
+                    execution_summary += f"\nDetails: {json.dumps(result.final_execution_result.details)}"
+
+                current_memory = project_memory_from_dict(session.get("project_memory")) or ProjectMemoryContext(summary="", recent_context="", known_commands=[])
+                updated_memory, memory_llm_summary = memory_service.generate_memory_update(
+                    artifact_manager=artifact_manager,
+                    interpretation=interpretation,
+                    current_memory=current_memory,
+                    execution_summary=execution_summary,
+                )
+
+                if updated_memory:
+                    self.project_manager.update_project_memory(
+                        session["project_id"],
+                        {
+                            "project_summary": updated_memory.summary,
+                            "recent_context_summary": updated_memory.recent_context,
+                            "known_commands": updated_memory.known_commands,
+                        }
+                    )
+                    session["project_memory"] = updated_memory.to_dict()
+                    session["activity"].append("Project memory updated successfully.")
+                    if memory_llm_summary:
+                        for artifact in memory_llm_summary.artifact_references:
+                            candidate = artifact.to_dict()
+                            if candidate not in session["artifact_references"]:
+                                session["artifact_references"].append(candidate)
+            except Exception as e:
+                session["activity"].append(f"Project memory update failed: {e}")
 
         # If there are queued tasks, reset session state to process the next one
         if session.get("queued_tasks"):
