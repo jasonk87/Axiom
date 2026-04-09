@@ -45,9 +45,10 @@ class LocalLLMDecomposeService:
             "You are breaking down a complex coding request into smaller, manageable subtasks for a local model.\n"
             "Return only JSON.\n"
             'The top-level object must be {"subtasks": [...]}.\n'
-            "Each subtask must contain exactly these keys: action, description, target_path, command, dependencies.\n"
-            "Action must be one of: create_file, modify_file, run_command, analyze, restore_snapshot, unknown.\n"
-            "If target_path or command are not applicable, set them to null.\n"
+            "Each subtask must contain these keys: action, description, target_path, command, process_id, input_str, dependencies.\n"
+            "Action must be one of: create_file, modify_file, run_command, start_process, send_input, read_output, kill_process, analyze, restore_snapshot, unknown.\n"
+            "If a key is not applicable to the action, set it to null.\n"
+            "For start_process, read_output, send_input, and kill_process, you must provide a unique 'process_id'. For send_input, you must also provide an 'input_str'.\n"
             "The 'dependencies' key must be a list of strings representing the descriptions or simple IDs of prior subtasks that must be completed before this one can start. If there are no dependencies, return an empty list.\n"
             "CRITICAL: You must explicitly review the provided 'project_memory' (specifically 'project_summary', 'known_commands', and 'retrieved_memories'). If the user asks for a new feature, adapt your subtask plan to reuse similar features or architectural patterns found in the memory."
         )
@@ -106,6 +107,8 @@ class LocalLLMDecomposeService:
                 description=st["description"],
                 target_path=st.get("target_path"),
                 command=st.get("command"),
+                process_id=st.get("process_id"),
+                input_str=st.get("input_str"),
                 dependencies=st.get("dependencies", []),
             )
             for st in result.payload["subtasks"]

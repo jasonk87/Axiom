@@ -535,6 +535,10 @@ class TaskAction(str, Enum):
     CREATE_FILE = "create_file"
     MODIFY_FILE = "modify_file"
     RUN_COMMAND = "run_command"
+    START_PROCESS = "start_process"
+    SEND_INPUT = "send_input"
+    READ_OUTPUT = "read_output"
+    KILL_PROCESS = "kill_process"
     RESTORE_SNAPSHOT = "restore_snapshot"
     COMPLEX = "complex"
     UNKNOWN = "unknown"
@@ -546,6 +550,8 @@ class SubTask:
     description: str
     target_path: str | None = None
     command: str | None = None
+    process_id: str | None = None
+    input_str: str | None = None
     result_summary: str | None = None
     dependencies: list[str] = field(default_factory=list)
 
@@ -561,6 +567,8 @@ class TaskInterpretation:
     target_path: str | None = None
     content: str | None = None
     command: str | None = None
+    process_id: str | None = None
+    input_str: str | None = None
     snapshot_id: str | None = None
     subtasks: list[SubTask] | None = None
     compressed_history: str | None = None

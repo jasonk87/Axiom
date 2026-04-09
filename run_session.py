@@ -116,6 +116,8 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
         target_path=payload.get("target_path"),
         content=payload.get("content"),
         command=payload.get("command"),
+        process_id=payload.get("process_id"),
+        input_str=payload.get("input_str"),
         snapshot_id=payload.get("snapshot_id"),
         subtasks=(
             [
@@ -124,6 +126,8 @@ def interpretation_from_dict(payload: dict) -> TaskInterpretation:
                     description=st["description"],
                     target_path=st.get("target_path"),
                     command=st.get("command"),
+                    process_id=st.get("process_id"),
+                    input_str=st.get("input_str"),
                     result_summary=st.get("result_summary"),
                     dependencies=st.get("dependencies", []),
                 )
@@ -1178,6 +1182,8 @@ class AxiomRunManager:
                                 description=st["description"],
                                 target_path=st.get("target_path"),
                                 command=st.get("command"),
+                                process_id=st.get("process_id"),
+                                input_str=st.get("input_str"),
                                 dependencies=st.get("dependencies", []),
                             )
                             for st in replan_payload.get("new_subtasks", [])
@@ -1444,9 +1450,11 @@ class AxiomRunManager:
             target_path=subtask.target_path,
             command=(
                 session.get("current_subtask_command")
-                if subtask.action == "run_command"
+                if subtask.action == "run_command" or subtask.action == "start_process"
                 else None
             ),
+            process_id=subtask.process_id,
+            input_str=subtask.input_str,
             content=(
                 session.get("current_subtask_content")
                 if subtask.action in {"create_file", "modify_file"}
@@ -1593,9 +1601,11 @@ class AxiomRunManager:
                 target_path=subtask.target_path,
                 command=(
                     session.get("current_subtask_command")
-                    if subtask.action == "run_command"
+                    if subtask.action == "run_command" or subtask.action == "start_process"
                     else None
                 ),
+                process_id=subtask.process_id,
+                input_str=subtask.input_str,
                 content=(
                     session.get("current_subtask_content")
                     if subtask.action in {"create_file", "modify_file"}
@@ -1759,7 +1769,7 @@ class AxiomRunManager:
                 cancellation_event,
             )
             return
-        if action == TaskAction.RUN_COMMAND:
+        if action in {TaskAction.RUN_COMMAND, TaskAction.START_PROCESS, TaskAction.SEND_INPUT, TaskAction.READ_OUTPUT, TaskAction.KILL_PROCESS}:
             self._execute_command_phase(
                 session,
                 phase,
@@ -1883,71 +1893,145 @@ class AxiomRunManager:
         plan: Plan,
         cancellation_event: Event,
     ) -> None:
-        assert interpretation.command is not None
+        action = interpretation.action
+
         if phase == "understand":
+            details = {"project_root": str(Path(terminal.project_root).resolve())}
+            if interpretation.command is not None:
+                details["command"] = interpretation.command
+            if interpretation.process_id is not None:
+                details["process_id"] = interpretation.process_id
+
             step_results.append(
                 orchestrator._completed_step(
                     step,
-                    "Command context confirmed.",
-                    {
-                        "command": interpretation.command,
-                        "project_root": str(Path(terminal.project_root).resolve()),
-                    },
+                    f"Terminal context confirmed for {action}.",
+                    details,
                 )
             )
             return
+
         if phase == "modify":
-            result = terminal.run(
-                interpretation.command, cancellation_event=cancellation_event
-            )
-            step_results.append(
-                StepResult(
-                    step_id=step.id,
-                    title=step.title,
-                    step_type=step.step_type,
-                    status=(
-                        StepStatus.COMPLETED if result.success else StepStatus.FAILED
-                    ),
-                    message=result.summary,
-                    phase=step.phase,
-                    details=result.to_dict(),
+            try:
+                if action == TaskAction.RUN_COMMAND:
+                    assert interpretation.command is not None
+                    result = terminal.run(
+                        interpretation.command, cancellation_event=cancellation_event
+                    )
+                    details = result.to_dict()
+                    success = result.success
+                    message = result.summary
+                    cancelled = result.cancelled
+                elif action == TaskAction.START_PROCESS:
+                    assert interpretation.command is not None
+                    assert interpretation.process_id is not None
+                    terminal.start_background_process(interpretation.command, interpretation.process_id)
+                    success = True
+                    cancelled = False
+                    message = f"Started background process {interpretation.process_id}"
+                    details = {"process_id": interpretation.process_id, "command": interpretation.command}
+                elif action == TaskAction.READ_OUTPUT:
+                    assert interpretation.process_id is not None
+                    stdout, stderr = terminal.read_background_output(interpretation.process_id)
+                    success = True
+                    cancelled = False
+                    message = f"Read output from background process {interpretation.process_id}"
+                    details = {"process_id": interpretation.process_id, "stdout": stdout, "stderr": stderr}
+                elif action == TaskAction.SEND_INPUT:
+                    assert interpretation.process_id is not None
+                    assert interpretation.input_str is not None
+                    terminal.send_background_input(interpretation.process_id, interpretation.input_str)
+                    success = True
+                    cancelled = False
+                    message = f"Sent input to background process {interpretation.process_id}"
+                    details = {"process_id": interpretation.process_id, "input": interpretation.input_str}
+                elif action == TaskAction.KILL_PROCESS:
+                    assert interpretation.process_id is not None
+                    terminal.kill_background_process(interpretation.process_id)
+                    success = True
+                    cancelled = False
+                    message = f"Killed background process {interpretation.process_id}"
+                    details = {"process_id": interpretation.process_id}
+                else:
+                    raise RuntimeError(f"Unhandled action {action} in command phase.")
+
+                step_results.append(
+                    StepResult(
+                        step_id=step.id,
+                        title=step.title,
+                        step_type=step.step_type,
+                        status=StepStatus.COMPLETED if success else StepStatus.FAILED,
+                        message=message,
+                        phase=step.phase,
+                        details=details,
+                    )
                 )
-            )
-            if not result.success:
+                if not success:
+                    remaining_steps = [
+                        candidate
+                        for candidate in plan.steps
+                        if candidate.id not in {item.step_id for item in step_results}
+                    ]
+                    step_results.extend(orchestrator._skip_remaining_steps(remaining_steps))
+                    if cancelled:
+                        session["cancellation_requested"] = True
+                    else:
+                        session["initial_execution_result"] = ExecutionResult(
+                            success=False,
+                            message="Terminal action failed.",
+                            details=details,
+                        ).to_dict()
+            except Exception as e:
+                step_results.append(
+                    StepResult(
+                        step_id=step.id,
+                        title=step.title,
+                        step_type=step.step_type,
+                        status=StepStatus.FAILED,
+                        message=str(e),
+                        phase=step.phase,
+                        details={},
+                    )
+                )
                 remaining_steps = [
                     candidate
                     for candidate in plan.steps
                     if candidate.id not in {item.step_id for item in step_results}
                 ]
                 step_results.extend(orchestrator._skip_remaining_steps(remaining_steps))
-                if result.cancelled:
-                    session["cancellation_requested"] = True
-                else:
-                    session["initial_execution_result"] = ExecutionResult(
-                        success=False,
-                        message="Command execution failed.",
-                        details=result.to_dict(),
-                    ).to_dict()
+                session["initial_execution_result"] = ExecutionResult(
+                    success=False,
+                    message="Terminal action failed with exception.",
+                    details={"error": str(e)},
+                ).to_dict()
             return
+
         if phase == "verify":
-            command_result = (
-                command_result_from_dict(session["last_command_result"])
-                if session["last_command_result"] is not None
-                else None
-            )
-            verification_step = orchestrator._run_verification_step(
-                step=step,
-                action=TaskAction.RUN_COMMAND,
-                target_path=None,
-                expected_content=None,
-                verification=verification,
-                verification_manager=verification_manager,
-                command_result=command_result,
-                cancellation_event=cancellation_event,
-            )
-            step_results.append(verification_step)
+            if action == TaskAction.RUN_COMMAND:
+                command_result = (
+                    command_result_from_dict(session["last_command_result"])
+                    if session.get("last_command_result") is not None
+                    else None
+                )
+                verification_step = orchestrator._run_verification_step(
+                    step=step,
+                    action=TaskAction.RUN_COMMAND,
+                    target_path=None,
+                    expected_content=None,
+                    verification=verification,
+                    verification_manager=verification_manager,
+                    command_result=command_result,
+                    cancellation_event=cancellation_event,
+                )
+                step_results.append(verification_step)
+            else:
+                step_results.append(
+                    orchestrator._completed_step(
+                        step, f"Terminal verification completed for {action}.", {}
+                    )
+                )
             return
-        raise RuntimeError(f"Unsupported phase '{phase}' for command action.")
+        raise RuntimeError(f"Unhandled phase '{phase}' for {action}.")
 
     def _execute_restore_phase(
         self,
