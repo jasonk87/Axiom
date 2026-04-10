@@ -128,6 +128,27 @@ class RunSessionPersistenceTests(unittest.TestCase):
             loaded["final_execution_result"]["details"]["reason"], "Need review"
         )
 
+    def test_prepare_run_rejects_invalid_auto_repair_attempts(self) -> None:
+        payload = {
+            "projectPath": str(self.project_root),
+            "mode": "implement",
+            "task": "Modify demo.txt to contain: PERSISTED CONTENT",
+            "approvalMode": "phased",
+            "verificationProfile": "basic",
+            "verificationCommands": [],
+            "commandPolicy": "permissive",
+            "previewChanges": True,
+            "buildRepoIndex": False,
+            "autoRepair": True,
+            "autoRepairAttempts": 0,
+            "scopePaths": ["."],
+            "protectedPaths": [],
+        }
+        with self.assertRaisesRegex(
+            ValueError, "autoRepairAttempts must be an integer >= 1."
+        ):
+            self.manager.prepare_run(payload)
+
 
 if __name__ == "__main__":
     unittest.main()

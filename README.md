@@ -189,7 +189,7 @@ Configure these environment variables for Ollama integration:
 
 ## Failure Handling And Repair
 
-When IMPLEMENT execution fails, Axiom classifies the failure (e.g., `command_execution_failure`, `verification_failure`, `scope_violation`) and can optionally perform one automatic repair attempt if `--auto-repair yes` is set.
+When IMPLEMENT execution fails, Axiom classifies the failure (e.g., `command_execution_failure`, `verification_failure`, `scope_violation`) and can optionally perform bounded automatic repair retries if `--auto-repair yes` is set, including bounded reapply/re-verify loops for direct file verification failures.
 
 ## CLI Usage
 
@@ -216,6 +216,7 @@ python main.py --project /path/to/project --mode implement --command-policy safe
 - `--preview-changes`: show change preview before approval
 - `--approval-mode normal|phased`: approval behavior
 - `--auto-repair yes|no`: allow automatic repair attempt
+- `--auto-repair-attempts N`: bounded retry attempts for command repair when auto repair is enabled (default: `1`)
 
 ## Design Notes
 

@@ -224,6 +224,7 @@ export type PrepareRunRequest = {
   previewChanges: boolean;
   buildRepoIndex: boolean;
   autoRepair: boolean;
+  autoRepairAttempts: number;
   scopePaths: string[];
   protectedPaths: string[];
 };

@@ -202,6 +202,7 @@ export default function App() {
   const [previewChanges, setPreviewChanges] = useState(true);
   const [buildRepoIndex, setBuildRepoIndex] = useState(true);
   const [autoRepair, setAutoRepair] = useState(false);
+  const [autoRepairAttempts, setAutoRepairAttempts] = useState("1");
   const [scopeText, setScopeText] = useState("");
   const [protectedText, setProtectedText] = useState(".env, config");
   const [task, setTask] = useState("");
@@ -343,6 +344,12 @@ export default function App() {
         return;
     }
 
+    const parsedAutoRepairAttempts = Number.parseInt(autoRepairAttempts, 10);
+    if (!Number.isFinite(parsedAutoRepairAttempts) || parsedAutoRepairAttempts < 1) {
+      setError("Auto repair attempts must be a whole number greater than or equal to 1.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -358,6 +365,7 @@ export default function App() {
         previewChanges,
         buildRepoIndex,
         autoRepair,
+        autoRepairAttempts: parsedAutoRepairAttempts,
         scopePaths: splitList(scopeText),
         protectedPaths: splitList(protectedText),
       };
@@ -1417,6 +1425,17 @@ export default function App() {
                     <label className="toggle">
                       <input type="checkbox" checked={autoRepair} onChange={(event) => setAutoRepair(event.target.checked)} />
                       Auto repair
+                    </label>
+                    <label>
+                      Auto repair attempts
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={autoRepairAttempts}
+                        onChange={(event) => setAutoRepairAttempts(event.target.value)}
+                        disabled={!autoRepair}
+                      />
                     </label>
                   </div>
                 </div>

@@ -86,6 +86,22 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_auto_repair_attempts(raw_value: object, *, strict: bool = True) -> int:
+    if raw_value is None or raw_value == "":
+        return 1
+    try:
+        attempts = int(raw_value)
+    except (TypeError, ValueError):
+        if strict:
+            raise ValueError("autoRepairAttempts must be an integer >= 1.")
+        return 1
+    if attempts < 1:
+        if strict:
+            raise ValueError("autoRepairAttempts must be an integer >= 1.")
+        return 1
+    return attempts
+
+
 def plan_from_dict(payload: dict | None) -> Plan | None:
     if payload is None:
         return None
@@ -539,6 +555,10 @@ class AxiomRunManager:
         build_repo_index = bool(payload.get("buildRepoIndex", False))
         preview_changes = bool(payload.get("previewChanges", False))
         auto_repair = bool(payload.get("autoRepair", False))
+        auto_repair_attempts = _parse_auto_repair_attempts(
+            payload.get("autoRepairAttempts", 1),
+            strict=True,
+        )
         approval_mode = ApprovalMode(payload.get("approvalMode", "normal"))
         command_policy = CommandPolicyMode(payload.get("commandPolicy", "permissive"))
         llm_settings = self.llm_settings_manager.get_settings()
@@ -570,6 +590,7 @@ class AxiomRunManager:
                 command_policy=command_policy,
                 preview_changes=preview_changes,
                 auto_repair=auto_repair,
+                auto_repair_attempts=auto_repair_attempts,
                 approval_mode=approval_mode,
             )
             session_id = uuid4().hex
@@ -2205,6 +2226,10 @@ class AxiomRunManager:
                 artifact_manager=artifact_manager,
                 artifact_references=artifact_references,
                 auto_repair=bool(session["request"].get("autoRepair", False)),
+                auto_repair_attempts=_parse_auto_repair_attempts(
+                    session["request"].get("autoRepairAttempts", 1),
+                    strict=False,
+                ),
                 initial_execution_result=initial_execution_result,
                 step_results=step_results,
                 workspace=workspace,

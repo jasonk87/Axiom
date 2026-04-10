@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from models import (
+    CommandResult,
     ExecutionResult,
     FailureCategory,
     FailureClassification,
@@ -30,6 +31,7 @@ class RepairManager:
         verification: VerificationConfig,
         repo_index_summary: RepoIndexSummary | None,
         scope_manager: ScopeManager,
+        repair_attempt_limit: int = 1,
     ) -> RepairSummary:
         repair_plan, eligible, reason = self._build_repair_plan(
             failure,
@@ -43,6 +45,7 @@ class RepairManager:
             auto_repair_enabled=auto_repair_enabled,
             eligible=eligible,
             reason=reason,
+            repair_attempt_limit=max(1, repair_attempt_limit),
             repair_plan=repair_plan,
         )
 
@@ -55,72 +58,108 @@ class RepairManager:
         workspace: WorkspaceManager,
         terminal: TerminalRunner,
         verification_manager: VerificationManager,
+        max_attempts: int = 1,
     ) -> RepairSummary:
         if not repair_summary.eligible or repair_summary.repair_plan is None:
             return repair_summary
 
         step_results: list[StepResult] = []
+        max_attempts = max(1, min(max_attempts, repair_summary.repair_attempt_limit))
         try:
             if (
                 failure.category == FailureCategory.COMMAND_EXECUTION_FAILURE
                 and interpretation.command is not None
             ):
+                repair_summary.repair_strategies_tried.append("retry_original_command")
+                max_attempts = max(1, max_attempts)
                 step_results.append(
                     self._completed(
                         repair_summary.repair_plan.steps[0],
                         "Reviewed failed command output.",
                     )
                 )
-                retry_result = terminal.run(interpretation.command)
-                retry_step_status = (
-                    StepStatus.COMPLETED if retry_result.success else StepStatus.FAILED
-                )
-                step_results.append(
-                    StepResult(
-                        step_id=repair_summary.repair_plan.steps[1].id,
-                        title=repair_summary.repair_plan.steps[1].title,
-                        step_type=repair_summary.repair_plan.steps[1].step_type,
-                        status=retry_step_status,
-                        message=retry_result.summary,
-                        phase=repair_summary.repair_plan.steps[1].phase,
-                        details=retry_result.to_dict(),
+                latest_retry_result = None
+                verification_step = None
+                for attempt_index in range(1, max_attempts + 1):
+                    retry_result = terminal.run(interpretation.command)
+                    latest_retry_result = retry_result
+                    retry_step_status = (
+                        StepStatus.COMPLETED
+                        if retry_result.success
+                        else StepStatus.FAILED
                     )
-                )
-                if not retry_result.success:
+                    retry_details = retry_result.to_dict()
+                    retry_details["repair_attempt"] = attempt_index
+                    retry_details["repair_attempt_limit"] = max_attempts
+                    step_results.append(
+                        StepResult(
+                            step_id=repair_summary.repair_plan.steps[1].id,
+                            title=repair_summary.repair_plan.steps[1].title,
+                            step_type=repair_summary.repair_plan.steps[1].step_type,
+                            status=retry_step_status,
+                            message=(
+                                f"Repair command attempt {attempt_index}/{max_attempts}: "
+                                f"{retry_result.summary}"
+                            ),
+                            phase=repair_summary.repair_plan.steps[1].phase,
+                            details=retry_details,
+                        )
+                    )
+                    repair_summary.repair_attempts_used = attempt_index
+                    if not retry_result.success:
+                        continue
+
+                    verification_step = self._rerun_verification_for_command(
+                        repair_summary.repair_plan.steps[2],
+                        verification,
+                        verification_manager,
+                    )
+                    verification_step.details["repair_attempt"] = attempt_index
+                    verification_step.details["repair_attempt_limit"] = max_attempts
+                    step_results.append(verification_step)
+                    if verification_step.status != StepStatus.FAILED:
+                        break
+
+                repair_summary.attempted = True
+                repair_summary.repair_step_results = step_results
+                if (
+                    latest_retry_result is None
+                    or not latest_retry_result.success
+                    or (
+                        verification_step is not None
+                        and verification_step.status == StepStatus.FAILED
+                    )
+                ):
                     step_results.append(
                         self._failed(
                             repair_summary.repair_plan.steps[2],
-                            "Retry command still failed.",
+                            "All bounded repair attempts were exhausted.",
                         )
                     )
-                    repair_summary.attempted = True
-                    repair_summary.repair_step_results = step_results
                     repair_summary.repair_execution_result = ExecutionResult(
                         success=False,
-                        message="Repair retry failed.",
-                        details=retry_result.to_dict(),
+                        message=(
+                            "Repair retries failed after "
+                            f"{repair_summary.repair_attempts_used} attempt(s)."
+                        ),
+                        details=self._attempt_metadata(
+                            latest_retry_result,
+                            repair_summary.repair_attempts_used,
+                            max_attempts,
+                        ),
                     )
                     return repair_summary
 
-                verification_step = self._rerun_verification_for_command(
-                    repair_summary.repair_plan.steps[2],
-                    verification,
-                    verification_manager,
-                )
-                step_results.append(verification_step)
-                repair_summary.attempted = True
-                repair_summary.repair_step_results = step_results
                 repair_summary.repair_execution_result = ExecutionResult(
-                    success=verification_step.status != StepStatus.FAILED,
+                    success=True,
                     message=(
-                        "Repair retry succeeded."
-                        if verification_step.status != StepStatus.FAILED
-                        else "Repair retry completed, but verification failed."
+                        "Repair retry succeeded on attempt "
+                        f"{repair_summary.repair_attempts_used}."
                     ),
                     details=(
                         verification_step.details
-                        if verification_step.details
-                        else retry_result.to_dict()
+                        if verification_step is not None and verification_step.details
+                        else latest_retry_result.to_dict()
                     ),
                 )
                 return repair_summary
@@ -132,58 +171,85 @@ class RepairManager:
                 and interpretation.target_path is not None
                 and interpretation.content is not None
             ):
+                repair_summary.repair_strategies_tried.append(
+                    "rewrite_and_reverify_target"
+                )
                 step_results.append(
                     self._completed(
                         repair_summary.repair_plan.steps[0],
                         "Reviewed verification failure for the written file.",
                     )
                 )
-                workspace.write_text(interpretation.target_path, interpretation.content)
-                step_results.append(
-                    self._completed(
-                        repair_summary.repair_plan.steps[1],
-                        "Reapplied requested file content under the original scope and protections.",
-                        {"target_path": interpretation.target_path},
+                last_verification_result: dict | None = None
+                succeeded = False
+                for attempt_index in range(1, max_attempts + 1):
+                    workspace.write_text(
+                        interpretation.target_path, interpretation.content
                     )
-                )
-                verification_result = verification_manager.verify_file_write(
-                    interpretation.target_path,
-                    interpretation.content,
-                )
-                status = (
-                    StepStatus.COMPLETED
-                    if (
-                        verification_result["exists"]
-                        and verification_result["content_matches"]
-                        and verification_result.get("configured_commands_passed", True)
+                    step_results.append(
+                        self._completed(
+                            repair_summary.repair_plan.steps[1],
+                            (
+                                "Reapplied requested file content under the original "
+                                f"scope and protections (attempt {attempt_index}/{max_attempts})."
+                            ),
+                            {
+                                "target_path": interpretation.target_path,
+                                "repair_attempt": attempt_index,
+                                "repair_attempt_limit": max_attempts,
+                            },
+                        )
                     )
-                    else StepStatus.FAILED
-                )
-                step_results.append(
-                    StepResult(
-                        step_id=repair_summary.repair_plan.steps[2].id,
-                        title=repair_summary.repair_plan.steps[2].title,
-                        step_type=repair_summary.repair_plan.steps[2].step_type,
-                        status=status,
-                        message=(
-                            "Post-repair verification passed."
-                            if status == StepStatus.COMPLETED
-                            else "Post-repair verification still failed."
-                        ),
-                        phase=repair_summary.repair_plan.steps[2].phase,
-                        details=verification_result,
+                    verification_result = verification_manager.verify_file_write(
+                        interpretation.target_path,
+                        interpretation.content,
                     )
-                )
+                    verification_result["repair_attempt"] = attempt_index
+                    verification_result["repair_attempt_limit"] = max_attempts
+                    last_verification_result = verification_result
+                    status = (
+                        StepStatus.COMPLETED
+                        if (
+                            verification_result["exists"]
+                            and verification_result["content_matches"]
+                            and verification_result.get(
+                                "configured_commands_passed", True
+                            )
+                        )
+                        else StepStatus.FAILED
+                    )
+                    step_results.append(
+                        StepResult(
+                            step_id=repair_summary.repair_plan.steps[2].id,
+                            title=repair_summary.repair_plan.steps[2].title,
+                            step_type=repair_summary.repair_plan.steps[2].step_type,
+                            status=status,
+                            message=(
+                                f"Post-repair verification passed on attempt {attempt_index}/{max_attempts}."
+                                if status == StepStatus.COMPLETED
+                                else f"Post-repair verification failed on attempt {attempt_index}/{max_attempts}."
+                            ),
+                            phase=repair_summary.repair_plan.steps[2].phase,
+                            details=verification_result,
+                        )
+                    )
+                    repair_summary.repair_attempts_used = attempt_index
+                    if status == StepStatus.COMPLETED:
+                        succeeded = True
+                        break
+
                 repair_summary.attempted = True
                 repair_summary.repair_step_results = step_results
                 repair_summary.repair_execution_result = ExecutionResult(
-                    success=status == StepStatus.COMPLETED,
+                    success=succeeded,
                     message=(
-                        "Repair rewrite completed."
-                        if status == StepStatus.COMPLETED
-                        else "Repair rewrite completed, but verification still failed."
+                        "Repair rewrite completed successfully."
+                        if succeeded
+                        else (
+                            "Repair rewrite exhausted bounded attempts without passing verification."
+                        )
                     ),
-                    details=verification_result,
+                    details=last_verification_result or {},
                 )
                 return repair_summary
         except Exception as error:
@@ -191,6 +257,8 @@ class RepairManager:
                 self._failed(repair_summary.repair_plan.steps[-1], str(error))
             )
             repair_summary.attempted = True
+            if repair_summary.repair_attempts_used == 0:
+                repair_summary.repair_attempts_used = 1
             repair_summary.repair_step_results = step_results
             repair_summary.repair_execution_result = ExecutionResult(
                 success=False,
@@ -269,11 +337,11 @@ class RepairManager:
                     PlanStep(
                         id="repair-step-2",
                         step_type=StepType.EXECUTION,
-                        title="Retry Command Once",
-                        description=f"Retry the original command one time without changing scope, permissions, or command text: {interpretation.command}",
+                        title="Retry Command (Bounded)",
+                        description=f"Retry the original command within the configured bounded attempt budget without changing scope, permissions, or command text: {interpretation.command}",
                         dependencies=["repair-step-1"],
                         scope_hint=scope_hint,
-                        expected_outcome="A single bounded retry is attempted under the same policy.",
+                        expected_outcome="A bounded retry series is attempted under the same policy.",
                         phase="repair_follow_up",
                         risk_hint="medium",
                         approval_hint="included_in_run_approval",
@@ -295,7 +363,7 @@ class RepairManager:
             return (
                 plan,
                 True,
-                "A single retry is eligible for command execution failure.",
+                "Bounded retry is eligible for command execution failure.",
             )
 
         if (
@@ -462,3 +530,14 @@ class RepairManager:
                 ]
             },
         )
+
+    @staticmethod
+    def _attempt_metadata(
+        command_result: ExecutionResult | CommandResult | None,
+        attempt: int,
+        attempt_limit: int,
+    ) -> dict:
+        base = command_result.to_dict() if command_result is not None else {}
+        base["repair_attempt"] = attempt
+        base["repair_attempt_limit"] = attempt_limit
+        return base
