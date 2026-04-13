@@ -48,7 +48,8 @@ class LocalLLMDecomposeService:
             "Each subtask must contain exactly these keys: action, description, target_path, command, dependencies.\n"
             "Action must be one of: create_file, modify_file, run_command, analyze, restore_snapshot, unknown.\n"
             "If target_path or command are not applicable, set them to null.\n"
-            "The 'dependencies' key must be a list of strings representing the descriptions or simple IDs of prior subtasks that must be completed before this one can start. If there are no dependencies, return an empty list."
+            "The 'dependencies' key must be a list of strings representing the descriptions or simple IDs of prior subtasks that must be completed before this one can start. If there are no dependencies, return an empty list.\n"
+            "CRITICAL: You must explicitly review the provided 'project_memory' (specifically 'project_summary', 'known_commands', and 'retrieved_memories'). If the user asks for a new feature, adapt your subtask plan to reuse similar features or architectural patterns found in the memory."
         )
         structured_context = {
             "task": {

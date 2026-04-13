@@ -44,6 +44,7 @@ from models import (
 from llm_compress_service import LocalLLMCompressService
 from llm_decompose_service import LocalLLMDecomposeService
 from llm_implement_service import LocalLLMImplementService
+from llm_memory_service import LocalLLMMemoryService
 from llm_replan_service import LocalLLMReplanService
 from orchestrator import Orchestrator
 from phase_policy import classify_plan_phases
@@ -617,6 +618,7 @@ class AxiomRunManager:
         )
 
         # Perform Local RAG BEFORE decomposition
+        retrieved_memories = []
         if (
             repo_index_summary
             and llm_settings.enabled
@@ -624,11 +626,32 @@ class AxiomRunManager:
         ):
             try:
                 vector_store = LocalVectorStore(project_root, llm_settings)
+
+                # Search for general codebase snippets
                 semantic_results = vector_store.search(task, top_k=3)
                 if semantic_results:
-                    repo_index_summary.semantic_search_results = semantic_results
+                    # Filter out memory results from general code results
+                    code_results = [r for r in semantic_results if not r["path"].startswith("memory://")]
+                    if code_results:
+                        repo_index_summary.semantic_search_results = code_results
+
+                # Search for specific discrete memories
+                memory_results = vector_store.search(task, top_k=5, filter_prefix="memory://")
+                if memory_results:
+                    retrieved_memories = [r["content"] for r in memory_results]
+
             except Exception as e:
                 print(f"[Axiom] Semantic search failed: {e}")
+
+        # Inject retrieved memories into the project memory context so decomposition/orchestration can use it
+        if project_memory and retrieved_memories:
+            project_memory.recent_context += f"\n\n[Relevant Past Memories]:\n" + "\n".join(retrieved_memories)
+        elif retrieved_memories:
+            project_memory = project_memory_from_dict({
+                "summary": "",
+                "known_commands": [],
+                "recent_context": f"[Relevant Past Memories]:\n" + "\n".join(retrieved_memories)
+            })
 
         if interpretation.action == TaskAction.COMPLEX:
             if not llm_settings.enabled:
@@ -2220,6 +2243,56 @@ class AxiomRunManager:
             if result.final_execution_result.success
             else "Execution ended with a failure summary."
         )
+
+        if result.final_execution_result.success and llm_settings.enabled:
+            try:
+                memory_service = LocalLLMMemoryService(settings=llm_settings)
+
+                execution_summary = f"Task: {interpretation.summary}\nOutcome: {result.final_execution_result.message}"
+                if result.final_execution_result.details:
+                    execution_summary += f"\nDetails: {json.dumps(result.final_execution_result.details)}"
+
+                current_memory = project_memory_from_dict(session.get("project_memory")) or ProjectMemoryContext(summary="", recent_context="", known_commands=[])
+                updated_memory, memory_llm_summary = memory_service.generate_memory_update(
+                    artifact_manager=artifact_manager,
+                    interpretation=interpretation,
+                    current_memory=current_memory,
+                    execution_summary=execution_summary,
+                )
+
+                if updated_memory:
+                    self.project_manager.update_project_memory(
+                        session["project_id"],
+                        {
+                            "project_summary": updated_memory.summary,
+                            "recent_context_summary": updated_memory.recent_context,
+                            "known_commands": updated_memory.known_commands,
+                        }
+                    )
+                    session["project_memory"] = updated_memory.to_dict()
+                    session["activity"].append("Project memory updated successfully.")
+
+                    # Persist discrete memories to vector store
+                    new_memories = getattr(updated_memory, "_new_discrete_memories", [])
+                    if new_memories and getattr(llm_settings, "embedding_model", None):
+                        try:
+                            from vector_store import LocalVectorStore
+                            vector_store = LocalVectorStore(project_root, llm_settings)
+                            from uuid import uuid4
+                            for memory_text in new_memories:
+                                vector_store.add_memory(uuid4().hex, memory_text)
+                            vector_store.sync_index()
+                            session["activity"].append(f"Stored {len(new_memories)} discrete memories to vector store.")
+                        except Exception as e:
+                            session["activity"].append(f"Failed to store discrete memories: {e}")
+
+                    if memory_llm_summary:
+                        for artifact in memory_llm_summary.artifact_references:
+                            candidate = artifact.to_dict()
+                            if candidate not in session["artifact_references"]:
+                                session["artifact_references"].append(candidate)
+            except Exception as e:
+                session["activity"].append(f"Project memory update failed: {e}")
 
         # If there are queued tasks, reset session state to process the next one
         if session.get("queued_tasks"):

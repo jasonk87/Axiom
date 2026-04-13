@@ -33,6 +33,7 @@ class RepoIndexer:
         python_symbols: dict[str, dict[str, list[str]]] = {}
         protected_files_indexed: list[str] = []
         notes: list[str] = []
+        reverse_dependencies: dict[str, list[str]] = {}
 
         import threading
 
@@ -89,7 +90,7 @@ class RepoIndexer:
                 likely_test_files.append(relative)
             if path.suffix.lower() == ".py":
                 symbols = self._extract_python_symbols(path)
-                if symbols["functions"] or symbols["classes"]:
+                if symbols["functions"] or symbols["classes"] or symbols.get("imports"):
                     python_symbols[relative] = symbols
 
             if vector_store is not None and suffix in {
@@ -115,6 +116,16 @@ class RepoIndexer:
                     "protected": is_protected,
                 }
             )
+
+        # Build reverse dependencies map
+        for relative_path, symbols in python_symbols.items():
+            for imported_module in symbols.get("imports", []):
+                # Convert module name to potential file path (e.g. models -> models.py)
+                # This is a simple approximation
+                potential_file = imported_module.replace(".", "/") + ".py"
+                if potential_file not in reverse_dependencies:
+                    reverse_dependencies[potential_file] = []
+                reverse_dependencies[potential_file].append(relative_path)
 
         if not files:
             notes.append("No readable files were indexed under the current scope.")
@@ -160,6 +171,7 @@ class RepoIndexer:
             python_symbols=python_symbols,
             protected_files_indexed=sorted(set(protected_files_indexed)),
             notes=notes,
+            reverse_dependencies=reverse_dependencies,
         )
         payload = {
             "summary": summary.to_dict(),
@@ -173,10 +185,11 @@ class RepoIndexer:
             self.workspace.track_read_path(path)
             tree = ast.parse(source)
         except (OSError, SyntaxError, UnicodeDecodeError):
-            return {"functions": [], "classes": []}
+            return {"functions": [], "classes": [], "imports": []}
 
         functions: list[str] = []
         classes: list[str] = []
+        imports: list[str] = []
         for node in tree.body:
             if isinstance(node, ast.FunctionDef):
                 functions.append(node.name)
@@ -184,9 +197,16 @@ class RepoIndexer:
                 functions.append(node.name)
             elif isinstance(node, ast.ClassDef):
                 classes.append(node.name)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    imports.append(node.module)
         return {
             "functions": functions,
             "classes": classes,
+            "imports": imports,
         }
 
     def _relative(self, path: Path) -> str:

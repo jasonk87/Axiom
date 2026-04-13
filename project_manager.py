@@ -228,6 +228,23 @@ class ProjectManager:
             self._persist_memory()
             return json.loads(json.dumps(self.memory["global_memory"]))
 
+    def update_project_memory(self, project_id: str, updates: dict) -> dict:
+        with self.lock:
+            memories = self.memory.setdefault("project_memories", {})
+            current = memories.get(project_id, self._default_project_memory(project_id))
+            current["project_summary"] = updates.get(
+                "project_summary", current.get("project_summary", "")
+            )
+            current["recent_context_summary"] = updates.get(
+                "recent_context_summary", current.get("recent_context_summary", "")
+            )
+            current["known_commands"] = updates.get(
+                "known_commands", current.get("known_commands", [])
+            )
+            memories[project_id] = current
+            self._persist_memory()
+            return json.loads(json.dumps(current))
+
     def set_active(self, project_id: str | None, session_id: str | None = None) -> None:
         with self.lock:
             self.context["active_project_id"] = project_id
