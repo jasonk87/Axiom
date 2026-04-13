@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChevronDown, ChevronRight, Check } from "lucide-react";
 
 export type SessionStepStatus = "pending" | "running" | "complete" | "warning";
 
@@ -29,7 +30,7 @@ export function SessionStepCard({
     <article className={`session-step-card status-${status}`}>
       <div className="session-step-rail">
         <span className={`session-step-icon status-${status}`}>
-          <span className="session-step-icon-inner" />
+          {status === "complete" ? <Check size={16} color="white" /> : <span className="session-step-icon-inner" />}
         </span>
       </div>
       <div className="session-step-main">
@@ -45,8 +46,8 @@ export function SessionStepCard({
               </button>
             ) : null}
             {children ? (
-              <button className="inline-toggle-button" onClick={() => onToggle(id)}>
-                {expanded ? "Collapse" : "Expand"}
+              <button className="inline-toggle-button" onClick={() => onToggle(id)} title={expanded ? "Collapse" : "Expand"}>
+                {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
               </button>
             ) : null}
           </div>

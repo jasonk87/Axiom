@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ class SnapshotManager:
     def create_snapshot(self) -> SnapshotReference:
         self.snapshot_root.mkdir(exist_ok=True)
         snapshot_id = (
-            f"{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+            f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
         )
         destination = self.snapshot_root / snapshot_id / "workspace"
         shutil.copytree(
@@ -32,7 +32,7 @@ class SnapshotManager:
             json.dumps(
                 {
                     "snapshot_id": snapshot_id,
-                    "created_at_utc": datetime.utcnow().isoformat(),
+                    "created_at_utc": datetime.now(timezone.utc).isoformat(),
                     "source_project_root": str(self.project_root),
                 },
                 indent=2,

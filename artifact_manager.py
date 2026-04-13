@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,7 +17,7 @@ class ArtifactManager:
         self.runs_root = self.axiom_root / "artifacts"
         self.run_id = (
             run_id
-            or f"{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+            or f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
         )
         self.run_root = self.runs_root / self.run_id
         self.run_root.mkdir(parents=True, exist_ok=True)
@@ -34,7 +34,7 @@ class ArtifactManager:
         )
 
     def build_filename(self, prefix: str) -> str:
-        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         suffix = uuid4().hex[:6]
         return f"{prefix}_{timestamp}_{suffix}.json"
 
