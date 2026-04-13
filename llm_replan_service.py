@@ -49,9 +49,10 @@ class LocalLLMReplanService:
             'The top-level object must be {"is_complete": bool, "reasoning": "...", "new_subtasks": [...]}.\n'
             "If the original task goal is fully accomplished, set is_complete to true and new_subtasks to an empty list.\n"
             "If more work is needed, set is_complete to false, and provide the next necessary subtasks.\n"
-            "Each subtask must contain exactly these keys: action, description, target_path, command, dependencies.\n"
-            "Action must be one of: create_file, modify_file, run_command, analyze, restore_snapshot, unknown.\n"
-            "If target_path or command are not applicable, set them to null.\n"
+            "Each subtask must contain these keys: action, description, target_path, command, process_id, input_str, dependencies.\n"
+            "Action must be one of: create_file, modify_file, run_command, start_process, send_input, read_output, kill_process, analyze, restore_snapshot, unknown.\n"
+            "If a key is not applicable to the action, set it to null.\n"
+            "For start_process, read_output, send_input, and kill_process, you must provide a unique 'process_id'. For send_input, you must also provide an 'input_str'.\n"
             "The 'dependencies' key must be a list of strings representing the descriptions of prior subtasks that must be completed before this one can start. If there are no dependencies, return an empty list."
         )
         structured_context = {
