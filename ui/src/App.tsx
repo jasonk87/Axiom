@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  archiveRun,
+  unarchiveRun,
+  steerRun,
+  queueTask,
   approvePhase,
   approvePlan,
   approveDecomposition,
@@ -214,6 +218,7 @@ export default function App() {
   const [layout, setLayout] = useLocalStorageState<LayoutState>("axiom-ui-session-layout-v3", DEFAULT_LAYOUT);
   const [expandedSteps, setExpandedSteps] = useLocalStorageState<Record<string, boolean>>("axiom-ui-step-expansion-v3", {});
   const [activeSessionId, setActiveSessionId] = useLocalStorageState<string | null>("axiom-ui-active-session-v3", null);
+  const [showArchived, setShowArchived] = useLocalStorageState<boolean>("axiom-ui-show-archived-v1", false);
   const [visibleStepCount, setVisibleStepCount] = useState(0);
   const [streamSignature, setStreamSignature] = useState("");
   const resizeRef = useRef<{ start: number; size: number } | null>(null);
@@ -330,6 +335,13 @@ export default function App() {
       setError("Open a project folder before starting a task.");
       return;
     }
+
+    if (session && isActiveStatus(session.status)) {
+        // If a session is already running, Enter should Queue by default
+        await handleQueueTask();
+        return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -351,6 +363,37 @@ export default function App() {
       const next = await prepareRun(payload);
       setSession(next);
       setActiveSessionId(next.id);
+      setTask("");
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSteerRun() {
+    if (!session || !task.trim()) return;
+    setBusy(true);
+    try {
+      const next = await steerRun(session.id, task);
+      setSession(next);
+      setTask("");
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleQueueTask() {
+    if (!session || !task.trim()) return;
+    setBusy(true);
+    try {
+      const next = await queueTask(session.id, task);
+      setSession(next);
+      setTask("");
       await refreshRuns();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -550,13 +593,37 @@ export default function App() {
         setProjectPath(project.root_path);
       }
       const latestRun = recentRuns
-        .filter((run) => run.project_id === projectId)
+        .filter((run) => run.project_id === projectId && !run.archived)
         .sort((a, b) => (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? ""))[0];
       if (latestRun) {
         const next = await fetchRun(latestRun.id);
         setSession(next);
         setActiveSessionId(next.id);
       }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleArchiveSession(runId: string) {
+    setBusy(true);
+    try {
+      await archiveRun(runId);
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnarchiveSession(runId: string) {
+    setBusy(true);
+    try {
+      await unarchiveRun(runId);
+      await refreshRuns();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
@@ -615,11 +682,12 @@ export default function App() {
         label: project.name,
         memory: project.memory,
         runs: recentRuns
-          .filter((run) => run.project_id === project.id)
+          .filter((run) => run.project_id === project.id && (showArchived || !run.archived))
           .sort((a, b) => (b.updated_at ?? b.created_at ?? "").localeCompare(a.updated_at ?? a.created_at ?? "")),
+        hasArchived: recentRuns.some((run) => run.project_id === project.id && run.archived),
       }))
       .sort((a, b) => (b.runs[0]?.updated_at ?? b.root).localeCompare(a.runs[0]?.updated_at ?? a.root));
-  }, [projects, recentRuns]);
+  }, [projects, recentRuns, showArchived]);
   const recentProjects = useMemo(() => groupedProjects.slice(0, 6), [groupedProjects]);
 
   function buildLLMStreamSteps(summary: LLMStructuredSummary | null | undefined, kind: "plan" | "review"): StreamStep[] {
@@ -751,26 +819,32 @@ export default function App() {
       steps.push({
         id: "decomposition",
         key: namespacedStepKey("decomposition"),
-        title: "Decomposing task...",
-        summary: `Broke the task down into ${session.subtasks.length} subtasks.`,
+        title: "Guiding Features & Subtasks",
+        summary: `Jules is working through ${session.subtasks.length} subtasks to implement your request.`,
         status: "complete",
         detail: (
           <div className="plan-step-list">
-            {session.subtasks.map((subtask, i) => (
-              <div key={i} className={`plan-step-card ${session.current_subtask_index === i ? "active-subtask" : ""}`}>
-                <div className="plan-step-meta">
-                  <span>{subtask.action}</span>
-                </div>
-                <strong>{subtask.description}</strong>
-                {subtask.target_path && <p>Target: {subtask.target_path}</p>}
-                {subtask.command && <p>Command: {subtask.command}</p>}
-                {subtask.result_summary && (
-                  <div className="detail-note success">
-                    Result: {subtask.result_summary}
+            {session.subtasks.map((subtask, i) => {
+              const isCompleted = (session.completed_subtask_indices ?? []).includes(i);
+              const isCurrent = session.current_subtask_index === i;
+              return (
+                <div key={i} className={`plan-step-card ${isCurrent ? "active-subtask" : ""} ${isCompleted ? "completed-subtask" : ""}`}>
+                  <div className="plan-step-meta">
+                    <span className="subtask-badge">{subtask.action}</span>
+                    {isCompleted && <span className="subtask-badge success">Completed</span>}
+                    {isCurrent && <span className="subtask-badge active">In Progress</span>}
                   </div>
-                )}
-              </div>
-            ))}
+                  <strong>{subtask.description}</strong>
+                  {subtask.target_path && <p className="subtask-target">Target: {subtask.target_path}</p>}
+                  {subtask.command && <code className="subtask-command">{subtask.command}</code>}
+                  {subtask.result_summary && (
+                    <div className="detail-note success">
+                      {subtask.result_summary}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ),
         actionLabel: "Inspect Subtasks",
@@ -1058,24 +1132,34 @@ export default function App() {
           {!layout.leftCollapsed ? (
             <>
               <button className="new-task-button" onClick={handleNewTask}>+ New Task</button>
-              <button className="ghost-button" onClick={openProjectPicker}>+ Open Folder</button>
             </>
           ) : (
             <>
               <button className="mini-icon-button" onClick={handleNewTask}>+</button>
-              <button className="mini-icon-button" onClick={openProjectPicker}>P</button>
             </>
           )}
         </div>
 
         {!layout.leftCollapsed ? (
           <div className="sidebar-scroll">
-            <div className="sidebar-section-heading">Projects</div>
+            <div className="sidebar-section-header">
+              <div className="sidebar-section-heading">Projects</div>
+              <div className="sidebar-section-actions">
+                <button className="sidebar-action-icon" onClick={openProjectPicker} title="Add Project Folder">+</button>
+                <button
+                  className={`archive-toggle ${showArchived ? "active" : ""}`}
+                  onClick={() => setShowArchived(!showArchived)}
+                  title={showArchived ? "Hide archived sessions" : "Show archived sessions"}
+                >
+                  {showArchived ? "Showing Archived" : "Show Archived"}
+                </button>
+              </div>
+            </div>
             {groupedProjects.length === 0 ? (
               <div className="sidebar-empty-state">
-                <strong>Open a project folder to get started</strong>
-                <p>Jules sessions live inside real rooted folders. Open one to begin a task.</p>
-                <button className="ghost-button" onClick={openProjectPicker}>Open Folder</button>
+                <strong>Add a project root to get started</strong>
+                <p>Jules sessions live inside real rooted folders on your local machine.</p>
+                <button className="ghost-button" onClick={openProjectPicker}>Add Project Root</button>
               </div>
             ) : null}
             {groupedProjects.map((group) => (
@@ -1095,20 +1179,31 @@ export default function App() {
                 <div className="session-thread-list">
                   {group.runs.length === 0 ? <div className="session-thread-empty">No sessions yet</div> : null}
                   {group.runs.map((run) => (
-                    <button
-                      key={run.id}
-                      className={run.id === session?.id ? "session-thread active" : "session-thread"}
-                      onClick={() => handleSelectSession(run.id)}
-                    >
-                      <div className="session-thread-main">
-                        <div className="session-thread-title">{run.task_interpretation?.summary ?? "New task"}</div>
-                        <div className="session-thread-meta">
-                          <span>{relativeTime(run.updated_at ?? run.created_at)}</span>
-                          <span>{humanizeStatus(run.status)}</span>
+                    <div key={run.id} className="session-thread-container">
+                      <button
+                        className={`${run.id === session?.id ? "session-thread active" : "session-thread"} ${run.archived ? "archived" : ""}`}
+                        onClick={() => handleSelectSession(run.id)}
+                      >
+                        <div className="session-thread-main">
+                          <div className="session-thread-title">{run.task_interpretation?.summary ?? "New task"}</div>
+                          <div className="session-thread-meta">
+                            <span>{relativeTime(run.updated_at ?? run.created_at)}</span>
+                            <span>{humanizeStatus(run.status)}</span>
+                          </div>
                         </div>
-                      </div>
-                      {diffCount(run) ? <span className="thread-diff-pill">{diffCount(run)}</span> : null}
-                    </button>
+                        {diffCount(run) ? <span className="thread-diff-pill">{diffCount(run)}</span> : null}
+                      </button>
+                      <button
+                        className="session-archive-button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          run.archived ? handleUnarchiveSession(run.id) : handleArchiveSession(run.id);
+                        }}
+                        title={run.archived ? "Unarchive session" : "Archive session"}
+                      >
+                        {run.archived ? "↺" : "×"}
+                      </button>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -1130,6 +1225,11 @@ export default function App() {
       <div className="sidebar-resize" onMouseDown={(event) => !layout.leftCollapsed && beginResize(event.clientX, layout.leftWidth)} />
 
       <main className="workspace-shell session-workspace-shell">
+        {session && isActiveStatus(session.status) && (
+            <div className="run-tracking-bar">
+                <div className="run-tracking-progress" />
+            </div>
+        )}
         <section className="workspace-main-card session-main-card">
           <header className="session-header-card">
             <div className="session-header-copy">
@@ -1167,38 +1267,42 @@ export default function App() {
                 <strong>{session?.status === "awaiting_plan_approval" ? "Plan approval required" : `Phase approval required: ${session?.pending_phase}`}</strong>
                 <span>Execution stays paused until you explicitly continue, decline, or cancel.</span>
               </div>
-              <input value={controlReason} onChange={(event) => setControlReason(event.target.value)} placeholder="Optional decline or cancel reason" />
-              {session?.status === "awaiting_plan_approval" ? (
-                <>
-                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApprovePlan} disabled={busy}>Approve Plan</button>
-                  <button className="ghost-button strong" onClick={handleDeclinePlan} disabled={busy}>Decline Plan</button>
-                </>
-              ) : session?.status === "awaiting_decomposition_approval" ? (
-                <>
-                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApproveDecomposition} disabled={busy}>Approve Tasks</button>
-                  <button className="ghost-button strong" onClick={handleDeclineDecomposition} disabled={busy}>Decline</button>
-                </>
-              ) : session?.status === "awaiting_implementation_approval" ? (
-                <>
-                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApproveImplementation} disabled={busy}>Approve Code</button>
-                  <button className="ghost-button strong" onClick={handleDeclineImplementation} disabled={busy}>Decline Code</button>
-                </>
-              ) : (
-                <>
-                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApprovePhase} disabled={busy}>Approve Phase</button>
-                  <button className="ghost-button strong" onClick={handleDeclinePhase} disabled={busy}>Decline Phase</button>
-                </>
-              )}
-              <button className="ghost-button strong" onClick={handleCancelRun} disabled={busy}>Cancel Run</button>
+              <div className="approval-controls">
+                  <input value={controlReason} onChange={(event) => setControlReason(event.target.value)} placeholder="Decline or cancel reason..." />
+                  <div className="approval-actions">
+                      {session?.status === "awaiting_plan_approval" ? (
+                        <>
+                          <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApprovePlan} disabled={busy}>Approve Plan</button>
+                          <button className="ghost-button strong" onClick={handleDeclinePlan} disabled={busy}>Decline Plan</button>
+                        </>
+                      ) : session?.status === "awaiting_decomposition_approval" ? (
+                        <>
+                          <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApproveDecomposition} disabled={busy}>Approve Tasks</button>
+                          <button className="ghost-button strong" onClick={handleDeclineDecomposition} disabled={busy}>Decline</button>
+                        </>
+                      ) : session?.status === "awaiting_implementation_approval" ? (
+                        <>
+                          <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApproveImplementation} disabled={busy}>Approve Code</button>
+                          <button className="ghost-button strong" onClick={handleDeclineImplementation} disabled={busy}>Decline Code</button>
+                        </>
+                      ) : (
+                        <>
+                          <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApprovePhase} disabled={busy}>Approve Phase</button>
+                          <button className="ghost-button strong" onClick={handleDeclinePhase} disabled={busy}>Decline Phase</button>
+                        </>
+                      )}
+                      <button className="ghost-button strong" onClick={handleCancelRun} disabled={busy}>Cancel Run</button>
+                  </div>
+              </div>
             </div>
           ) : null}
 
           <div className="stream-scroll interactive-stream-scroll">
             {emptyProjectState ? (
               <div className="empty-stream-state">
-                <h2>Open a project folder to begin</h2>
-                <p>Jules organizes sessions under real project roots. Choose a folder, then start a task inside that project.</p>
-                <button className="primary-button" onClick={openProjectPicker}>Open Folder</button>
+                <h2>Add a project root to begin</h2>
+                <p>Jules organizes sessions under real project roots on your machine. Add one to start a task.</p>
+                <button className="primary-button" onClick={openProjectPicker}>Add Project Root</button>
               </div>
             ) : visibleSteps.length === 0 ? (
               <div className="empty-stream-state">
@@ -1322,30 +1426,54 @@ export default function App() {
               <input
                 value={task}
                 onChange={(event) => setTask(event.target.value)}
-                placeholder={activeProject ? "Ask Jules to build something..." : "Open a project folder to begin"}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    if (event.ctrlKey || event.metaKey) {
+                      void handleSteerRun();
+                    } else {
+                      void handleRun();
+                    }
+                  }
+                }}
+                placeholder={
+                    activeProject
+                        ? (session && isActiveStatus(session.status))
+                            ? "Enter to queue, Ctrl+Enter to steer Jules..."
+                            : "Ask Jules to build something..."
+                        : "Open a project folder to begin"
+                }
                 disabled={!activeProject}
               />
-              <button className={`run-button ${busy ? "loading" : ""}`} onClick={handleRun} disabled={busy || !task.trim() || !activeProject}>Run</button>
+              <button
+                className={`run-button ${busy ? "loading" : ""}`}
+                onClick={handleRun}
+                disabled={busy || !task.trim() || !activeProject}
+                title={session && isActiveStatus(session.status) ? "Queue Task" : "Run Task"}
+              >
+                {session && isActiveStatus(session.status) ? "Queue" : "Run"}
+              </button>
+              {session && isActiveStatus(session.status) && (
+                <button
+                    className="steer-button"
+                    onClick={handleSteerRun}
+                    disabled={busy || !task.trim()}
+                    title="Steer Jules immediately"
+                >
+                    Steer
+                </button>
+              )}
             </div>
             {!activeProject ? <div className="composer-helper">Open a project folder before creating a new session.</div> : null}
           </div>
         </section>
       </main>
 
-      <InspectModal open={projectModalOpen} title="Open Project Folder" onClose={() => setProjectModalOpen(false)}>
+      <InspectModal open={projectModalOpen} title="Manage Projects" onClose={() => setProjectModalOpen(false)}>
         <div className="project-picker-panel">
-          <div className="project-picker-intro">
-            <strong>Choose a workspace root</strong>
-            <p>
-              Native folder picking is not available in this browser flow, so Jules uses known workspaces first and a
-              manual absolute-path fallback when needed.
-            </p>
-          </div>
-
           <section className="project-picker-section">
             <div className="project-picker-heading">
-              <strong>Recent projects</strong>
-              <span>{recentProjects.length > 0 ? "Reopen or switch instantly" : "No known project roots yet"}</span>
+              <strong>Recent project roots</strong>
+              <span>Switch between your workspace roots instantly</span>
             </div>
             {recentProjects.length > 0 ? (
               <div className="project-picker-list">
@@ -1358,7 +1486,7 @@ export default function App() {
                   >
                     <div>
                       <strong>{project.label}</strong>
-                      <span>{project.root}</span>
+                      <span className="project-path-hint">{project.root}</span>
                     </div>
                     <span className="project-picker-meta">
                       {project.runs.length > 0 ? `${pluralize(project.runs.length, "session")} · ${relativeTime(project.runs[0]?.updated_at ?? project.runs[0]?.created_at)}` : "No sessions yet"}
@@ -1368,38 +1496,34 @@ export default function App() {
               </div>
             ) : (
               <div className="project-picker-empty">
-                Open a folder once and it will appear here for quick switching next time.
+                No project roots defined yet. Enter a path below to add your first one.
               </div>
             )}
           </section>
 
           <section className="project-picker-section">
-            <button
-              className="advanced-toggle-button"
-              onClick={() => setLayout((current) => ({ ...current, projectPickerManualOpen: !current.projectPickerManualOpen }))}
-            >
-              {layout.projectPickerManualOpen ? "Hide manual path entry" : "Enter a folder path manually"}
-            </button>
-            {layout.projectPickerManualOpen ? (
-              <div className="project-picker-manual">
+            <div className="project-picker-heading">
+              <strong>Add a project root</strong>
+              <span>Enter an absolute path to a folder on your machine</span>
+            </div>
+            <div className="project-picker-manual">
                 <div className="advanced-grid">
                   <label>
-                    Folder path
-                    <input value={projectPath} onChange={(event) => setProjectPath(event.target.value)} placeholder="C:\\code\\my-project" />
+                    Absolute folder path
+                    <input value={projectPath} onChange={(event) => setProjectPath(event.target.value)} placeholder="/home/user/code/my-project" />
                   </label>
                   <label>
-                    Project name
-                    <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Optional display name" />
+                    Display name
+                    <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="Friendly name for sidebar" />
                   </label>
                 </div>
                 <div className="project-picker-actions">
-                  <span className="detail-note">Jules will create the project if the root is new, or reopen it if it already exists.</span>
+                  <span className="detail-note">Jules will index this root and allow you to create task-specific sessions inside it.</span>
                   <button className="primary-button" onClick={handleCreateProject} disabled={busy || !projectPath.trim()}>
-                    Open Folder
+                    Add Project Root
                   </button>
                 </div>
-              </div>
-            ) : null}
+            </div>
           </section>
 
           {error ? (

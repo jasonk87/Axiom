@@ -140,6 +140,34 @@ export async function cancelRun(sessionId: string, reason?: string): Promise<Axi
   });
 }
 
+export async function steerRun(sessionId: string, prompt: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/steer`, {
+    method: "POST",
+    body: JSON.stringify({ prompt }),
+  });
+}
+
+export async function queueTask(sessionId: string, task: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/queue`, {
+    method: "POST",
+    body: JSON.stringify({ task }),
+  });
+}
+
+export async function archiveRun(sessionId: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/archive`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function unarchiveRun(sessionId: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/unarchive`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export async function fetchArtifact(path: string): Promise<ArtifactContent> {
   const url = `/api/artifact?path=${encodeURIComponent(path)}`;
   return request(url);

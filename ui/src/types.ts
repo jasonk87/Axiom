@@ -83,6 +83,7 @@ export type AxiomSession = {
   project_root: string;
   status: string;
   mode: string;
+  archived?: boolean;
   updated_at?: string;
   created_at?: string;
   pending_phase?: string | null;
@@ -138,6 +139,7 @@ export type AxiomSession = {
     result_summary?: string | null;
   }>;
   current_subtask_index?: number;
+  completed_subtask_indices?: number[];
   current_subtask_content?: string | null;
   current_subtask_command?: string | null;
   phase_policies?: Array<{

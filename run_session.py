@@ -942,6 +942,36 @@ class AxiomRunManager:
             self._persist_session(session)
         return self.get_run_state(session_id)
 
+    def archive_run(self, session_id: str) -> dict:
+        session = self._session(session_id)
+        session["archived"] = True
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
+    def unarchive_run(self, session_id: str) -> dict:
+        session = self._session(session_id)
+        session["archived"] = False
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
+    def queue_task(self, session_id: str, task: str) -> dict:
+        session = self._session(session_id)
+        if "queued_tasks" not in session:
+            session["queued_tasks"] = []
+        session["queued_tasks"].append(task)
+        session["activity"].append(f"Queued new task: {task}")
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
+    def steer_run(self, session_id: str, prompt: str) -> dict:
+        session = self._session(session_id)
+        if "steering_prompts" not in session:
+            session["steering_prompts"] = []
+        session["steering_prompts"].append(prompt)
+        session["activity"].append(f"Received steering input: {prompt}")
+        self._persist_session(session)
+        return self.get_run_state(session_id)
+
     def _start_worker(self, session_id: str) -> None:
         session = self._session(session_id)
         existing = session.get("_thread")
@@ -1379,14 +1409,12 @@ class AxiomRunManager:
 
     def _execute_subtask(self, session: dict, subtask) -> None:
         # Construct a task interpretation dynamically from the subtask state
-        from models import TaskAction, TaskInterpretation
-
         try:
             action_val = TaskAction(subtask.action)
         except ValueError:
             action_val = TaskAction.UNKNOWN
 
-        interpretation = TaskInterpretation(
+        sub_interpretation = TaskInterpretation(
             raw_task=subtask.description,
             summary=subtask.description,
             action=action_val,
@@ -1418,7 +1446,7 @@ class AxiomRunManager:
 
         plan = Planner().build_plan(
             Mode(session["mode"]),
-            interpretation,
+            sub_interpretation,
             scope_manager,
             verification,
             repo_index_summary,
@@ -1495,6 +1523,20 @@ class AxiomRunManager:
                     f"Status: {last_step['status']}. Message: {last_step['message']}"
                 )
 
+        # Check for steering prompts after subtask execution
+        if session.get("steering_prompts"):
+            steering_prompt = session["steering_prompts"].pop(0)
+            session["activity"].append(f"Reacting to steering: {steering_prompt}")
+
+            # Update the ROOT task interpretation to include the steering prompt
+            root_interpretation = interpretation_from_dict(session["task_interpretation"])
+            root_interpretation.raw_task = f"{root_interpretation.raw_task}\n\n[USER STEER]: {steering_prompt}"
+            session["task_interpretation"] = root_interpretation.to_dict()
+
+            # Force a replan by setting current_subtask_index to -1 and tricking the loop
+            session["current_subtask_index"] = -1
+            self._persist_session(session)
+
     def _execute_phase(self, session: dict, phase: str) -> None:
         plan = plan_from_dict(session["plan"])
         if plan is None:
@@ -1508,12 +1550,11 @@ class AxiomRunManager:
         command_policy = CommandPolicyMode(session["command_policy"])
         verification = verification_from_dict(session["verification"])
         interpretation = interpretation_from_dict(session["task_interpretation"])
-        # If it's a COMPLEX action, use the dynamic subtask interpretation we construct inside _execute_subtask
-        # Otherwise, stick to the root interpretation.
-        from models import TaskAction, TaskInterpretation
 
+        # If it's a COMPLEX action, use the dynamic subtask interpretation
+        # Otherwise, stick to the root interpretation.
         if (
-            interpretation.action == TaskAction.COMPLEX.value
+            interpretation.action == TaskAction.COMPLEX
             and interpretation.subtasks
         ):
             subtask = interpretation.subtasks[session["current_subtask_index"]]
@@ -1541,9 +1582,9 @@ class AxiomRunManager:
                 ),
                 snapshot_id=None,
             )
-        elif interpretation.action == TaskAction.COMPLEX.value:
+        elif interpretation.action == TaskAction.COMPLEX:
             # Fallback to UNKNOWN if decomposition failed or LLM was disabled
-            interpretation.action = TaskAction.UNKNOWN.value  # type: ignore
+            interpretation.action = TaskAction.UNKNOWN
 
         orchestrator = Orchestrator(project_root)
         artifact_manager = ArtifactManager(
@@ -2179,6 +2220,33 @@ class AxiomRunManager:
             if result.final_execution_result.success
             else "Execution ended with a failure summary."
         )
+
+        # If there are queued tasks, reset session state to process the next one
+        if session.get("queued_tasks"):
+            next_task = session["queued_tasks"].pop(0)
+            session["activity"].append(f"Starting next queued task: {next_task}")
+
+            # Update root interpretation with new task
+            # For simplicity, we reset many fields to allow Orchestrator logic to re-run
+            root_interpretation = interpretation_from_dict(session["task_interpretation"])
+            root_interpretation.raw_task = next_task
+            root_interpretation.summary = next_task
+            root_interpretation.action = TaskAction.COMPLEX # Assume complex for now
+            root_interpretation.subtasks = None
+            root_interpretation.compressed_history = None
+            root_interpretation.compressed_subtask_count = 0
+
+            session["task_interpretation"] = root_interpretation.to_dict()
+            session["status"] = RunStatus.RUNNING.value
+            session["current_subtask_index"] = -1
+            session["completed_subtask_indices"] = []
+            session["phase_order"] = []
+            session["next_phase_index"] = 0
+
+            self._persist_session(session)
+            self._start_worker(session["id"])
+            return
+
         self._persist_session(session)
 
     def _build_success_execution_result(self, session: dict) -> ExecutionResult:
