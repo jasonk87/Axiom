@@ -34,6 +34,9 @@ export type LLMSettings = {
   timeout_seconds: number;
   retry_limit: number;
   temperature: number;
+  compression_enabled: boolean;
+  compression_threshold: number;
+  embedding_model: string;
 };
 
 export type LLMStructuredSummary = {
@@ -95,6 +98,8 @@ export type AxiomSession = {
     raw_task?: string;
     action: string;
     target_path?: string | null;
+    compressed_history?: string | null;
+    compressed_subtask_count?: number;
   };
   repo_index_summary?: {
     generated?: boolean;
@@ -125,6 +130,16 @@ export type AxiomSession = {
       approval_hint: string;
     }>;
   } | null;
+  subtasks?: Array<{
+    action: string;
+    description: string;
+    target_path?: string | null;
+    command?: string | null;
+    result_summary?: string | null;
+  }>;
+  current_subtask_index?: number;
+  current_subtask_content?: string | null;
+  current_subtask_command?: string | null;
   phase_policies?: Array<{
     phase: string;
     classification: string;

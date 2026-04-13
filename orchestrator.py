@@ -1071,8 +1071,8 @@ class Orchestrator:
 
         return TaskInterpretation(
             raw_task=task,
-            summary="Interpret the request and handle it safely within the selected mode.",
-            action=TaskAction.UNKNOWN,
+            summary="Complex request requiring decomposition.",
+            action=TaskAction.COMPLEX,
         )
 
     def _request_plan_approval(self, plan: Plan) -> bool:

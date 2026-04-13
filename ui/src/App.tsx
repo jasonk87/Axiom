@@ -2,10 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   approvePhase,
   approvePlan,
+  approveDecomposition,
+  approveImplementation,
   cancelRun,
   createProject,
   declinePhase,
   declinePlan,
+  declineDecomposition,
+  declineImplementation,
   fetchArtifact,
   fetchLLMSettings,
   fetchProjects,
@@ -60,6 +64,9 @@ const DEFAULT_LLM_SETTINGS: LLMSettings = {
   timeout_seconds: 20,
   retry_limit: 2,
   temperature: 0.1,
+  compression_enabled: true,
+  compression_threshold: 5,
+  embedding_model: "nomic-embed-text",
 };
 
 function splitList(raw: string): string[] {
@@ -397,6 +404,34 @@ export default function App() {
     }
   }
 
+  async function handleApproveDecomposition() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setSession(await approveDecomposition(session.id));
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleApproveImplementation() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setSession(await approveImplementation(session.id));
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDeclinePlan() {
     if (!session) return;
     setBusy(true);
@@ -417,6 +452,34 @@ export default function App() {
     setError(null);
     try {
       setSession(await declinePhase(session.id, controlReason || undefined));
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeclineDecomposition() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setSession(await declineDecomposition(session.id, controlReason || undefined));
+      await refreshRuns();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeclineImplementation() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setSession(await declineImplementation(session.id, controlReason || undefined));
       await refreshRuns();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
@@ -621,7 +684,7 @@ export default function App() {
 
   const commandResults = session?.commands_run ?? [];
   const artifactReferences = session?.artifact_references ?? [];
-  const pendingApproval = session?.status === "awaiting_plan_approval" || session?.status === "awaiting_phase_approval";
+  const pendingApproval = session?.status === "awaiting_plan_approval" || session?.status === "awaiting_phase_approval" || session?.status === "awaiting_decomposition_approval" || session?.status === "awaiting_implementation_approval";
   const commandStepStatus: SessionStepStatus =
     commandResults.some((command) => command.cancelled || !command.success)
       ? "warning"
@@ -684,34 +747,85 @@ export default function App() {
       },
     });
 
-    steps.push({
-      id: "plan",
-      key: namespacedStepKey("plan"),
-      title: "Generating a step-by-step plan...",
-      summary: session.plan
-        ? `Created a ${session.plan.steps.length}-step plan for the current task.`
-        : "Building a task-aware plan now.",
-      status: session.plan ? "complete" : isActiveStatus(session.status) || session.status === "awaiting_plan_approval" ? "running" : "pending",
-      detail: (
-        <div className="plan-step-list">
-          {session.plan?.steps?.map((step) => (
-            <div key={step.id} className="plan-step-card">
-              <div className="plan-step-meta">
-                <span>{step.phase}</span>
-                <span>{step.type}</span>
-                <span>{step.approval_hint}</span>
+    if (session.subtasks && session.subtasks.length > 0) {
+      steps.push({
+        id: "decomposition",
+        key: namespacedStepKey("decomposition"),
+        title: "Decomposing task...",
+        summary: `Broke the task down into ${session.subtasks.length} subtasks.`,
+        status: "complete",
+        detail: (
+          <div className="plan-step-list">
+            {session.subtasks.map((subtask, i) => (
+              <div key={i} className={`plan-step-card ${session.current_subtask_index === i ? "active-subtask" : ""}`}>
+                <div className="plan-step-meta">
+                  <span>{subtask.action}</span>
+                </div>
+                <strong>{subtask.description}</strong>
+                {subtask.target_path && <p>Target: {subtask.target_path}</p>}
+                {subtask.command && <p>Command: {subtask.command}</p>}
+                {subtask.result_summary && (
+                  <div className="detail-note success">
+                    Result: {subtask.result_summary}
+                  </div>
+                )}
               </div>
-              <strong>{step.title}</strong>
-              <p>{step.description}</p>
-            </div>
-          )) ?? <div className="detail-note">Waiting for plan details.</div>}
-        </div>
-      ),
-      actionLabel: session.plan ? "Inspect Plan" : undefined,
-      actionKind: "inspect",
-      inspectTitle: "Plan",
-      inspectContent: session.plan,
-    });
+            ))}
+          </div>
+        ),
+        actionLabel: "Inspect Subtasks",
+        actionKind: "inspect",
+        inspectTitle: "Subtasks",
+        inspectContent: session.subtasks,
+      });
+
+      if (session.current_subtask_content || session.current_subtask_command) {
+         steps.push({
+            id: "implementation",
+            key: namespacedStepKey("implementation"),
+            title: `Generated implementation for subtask ${(session.current_subtask_index ?? 0) + 1}`,
+            summary: "Awaiting code/command review before execution.",
+            status: "complete",
+            detail: (
+              <div className="plan-step-list">
+                <div className="plan-step-card">
+                  <strong>Implementation Details</strong>
+                  <pre>{session.current_subtask_content ?? session.current_subtask_command}</pre>
+                </div>
+              </div>
+            ),
+         });
+      }
+    } else {
+      steps.push({
+        id: "plan",
+        key: namespacedStepKey("plan"),
+        title: "Generating a step-by-step plan...",
+        summary: session.plan
+          ? `Created a ${session.plan.steps.length}-step plan for the current task.`
+          : "Building a task-aware plan now.",
+        status: session.plan ? "complete" : isActiveStatus(session.status) || session.status === "awaiting_plan_approval" ? "running" : "pending",
+        detail: (
+          <div className="plan-step-list">
+            {session.plan?.steps?.map((step) => (
+              <div key={step.id} className="plan-step-card">
+                <div className="plan-step-meta">
+                  <span>{step.phase}</span>
+                  <span>{step.type}</span>
+                  <span>{step.approval_hint}</span>
+                </div>
+                <strong>{step.title}</strong>
+                <p>{step.description}</p>
+              </div>
+            )) ?? <div className="detail-note">Waiting for plan details.</div>}
+          </div>
+        ),
+        actionLabel: session.plan ? "Inspect Plan" : undefined,
+        actionKind: "inspect",
+        inspectTitle: "Plan",
+        inspectContent: session.plan,
+      });
+    }
 
     steps.push(...buildLLMStreamSteps(session.llm_review_summary, "review"));
 
@@ -1056,12 +1170,22 @@ export default function App() {
               <input value={controlReason} onChange={(event) => setControlReason(event.target.value)} placeholder="Optional decline or cancel reason" />
               {session?.status === "awaiting_plan_approval" ? (
                 <>
-                  <button className="primary-button" onClick={handleApprovePlan} disabled={busy}>Approve Plan</button>
+                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApprovePlan} disabled={busy}>Approve Plan</button>
                   <button className="ghost-button strong" onClick={handleDeclinePlan} disabled={busy}>Decline Plan</button>
+                </>
+              ) : session?.status === "awaiting_decomposition_approval" ? (
+                <>
+                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApproveDecomposition} disabled={busy}>Approve Tasks</button>
+                  <button className="ghost-button strong" onClick={handleDeclineDecomposition} disabled={busy}>Decline</button>
+                </>
+              ) : session?.status === "awaiting_implementation_approval" ? (
+                <>
+                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApproveImplementation} disabled={busy}>Approve Code</button>
+                  <button className="ghost-button strong" onClick={handleDeclineImplementation} disabled={busy}>Decline Code</button>
                 </>
               ) : (
                 <>
-                  <button className="primary-button" onClick={handleApprovePhase} disabled={busy}>Approve Phase</button>
+                  <button className={`primary-button ${busy ? "loading" : ""}`} onClick={handleApprovePhase} disabled={busy}>Approve Phase</button>
                   <button className="ghost-button strong" onClick={handleDeclinePhase} disabled={busy}>Decline Phase</button>
                 </>
               )}
@@ -1201,7 +1325,7 @@ export default function App() {
                 placeholder={activeProject ? "Ask Axiom to build something..." : "Open a project folder to begin"}
                 disabled={!activeProject}
               />
-              <button className="run-button" onClick={handleRun} disabled={busy || !task.trim() || !activeProject}>Run</button>
+              <button className={`run-button ${busy ? "loading" : ""}`} onClick={handleRun} disabled={busy || !task.trim() || !activeProject}>Run</button>
             </div>
             {!activeProject ? <div className="composer-helper">Open a project folder before creating a new session.</div> : null}
           </div>
@@ -1323,6 +1447,31 @@ export default function App() {
             <label className="toggle">
               <input type="checkbox" checked={llmSettings.review_enabled} onChange={(event) => setLlmSettings((current) => ({ ...current, review_enabled: event.target.checked }))} />
               Enable plan review
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={llmSettings.compression_enabled} onChange={(event) => setLlmSettings((current) => ({ ...current, compression_enabled: event.target.checked }))} />
+              Enable context compression
+            </label>
+          </div>
+          <div className="advanced-grid">
+            <label>
+              Subtasks before compression
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={llmSettings.compression_threshold}
+                onChange={(event) => setLlmSettings((current) => ({ ...current, compression_threshold: Number(event.target.value) || 5 }))}
+              />
+            </label>
+            <label>
+              Embedding Model (Local RAG)
+              <input
+                type="text"
+                value={llmSettings.embedding_model}
+                onChange={(event) => setLlmSettings((current) => ({ ...current, embedding_model: event.target.value }))}
+                placeholder="nomic-embed-text"
+              />
             </label>
           </div>
           <div className="ai-settings-footer">

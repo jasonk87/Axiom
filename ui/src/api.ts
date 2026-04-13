@@ -98,6 +98,34 @@ export async function declinePlan(sessionId: string, reason?: string): Promise<A
   });
 }
 
+export async function approveDecomposition(sessionId: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/approve-decomposition`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function declineDecomposition(sessionId: string, reason?: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/decline-decomposition`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function approveImplementation(sessionId: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/approve-implementation`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function declineImplementation(sessionId: string, reason?: string): Promise<AxiomSession> {
+  return request(`/api/runs/${sessionId}/decline-implementation`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export async function declinePhase(sessionId: string, reason?: string): Promise<AxiomSession> {
   return request(`/api/runs/${sessionId}/decline-phase`, {
     method: "POST",

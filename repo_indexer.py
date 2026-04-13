@@ -6,6 +6,7 @@ from pathlib import Path
 from models import RepoIndexSummary
 from scope_manager import ScopeManager, ScopeViolationError
 from workspace_manager import WorkspaceManager
+from vector_store import LocalVectorStore
 
 
 class RepoIndexer:
@@ -32,6 +33,19 @@ class RepoIndexer:
         python_symbols: dict[str, dict[str, list[str]]] = {}
         protected_files_indexed: list[str] = []
         notes: list[str] = []
+
+        import threading
+
+        from llm_client import LLMSettings
+        settings = LLMSettings.from_env()
+        vector_store = None
+        if settings.enabled and getattr(settings, "embedding_model", None):
+             try:
+                 vector_store = LocalVectorStore(self.project_root, settings)
+             except Exception as e:
+                 print(f"[RepoIndexer] Failed to initialize vector store: {e}")
+
+        files_to_embed = []
 
         for path in self.project_root.rglob("*"):
             if not path.is_file():
@@ -66,6 +80,9 @@ class RepoIndexer:
                 if symbols["functions"] or symbols["classes"]:
                     python_symbols[relative] = symbols
 
+            if vector_store is not None and suffix in {".py", ".md", ".txt", ".ts", ".tsx", ".js", ".jsx", ".json", ".yaml", ".yml", ".css", ".html"}:
+                files_to_embed.append((relative, path))
+
             files.append(
                 {
                     "path": relative,
@@ -78,6 +95,24 @@ class RepoIndexer:
             notes.append("No readable files were indexed under the current scope.")
         if self.scope_manager.describe_effective_scope()["mode"] == "selected_paths":
             notes.append("Repo index is scope-limited and may omit files outside the active scope.")
+
+        # If the local LLM is enabled and configured for embeddings, sync the vector store in the background
+        if vector_store is not None and files_to_embed:
+            def _embed_and_sync(v_store, f_to_embed):
+                for rel_path, full_path in f_to_embed:
+                    try:
+                        content = full_path.read_text(encoding="utf-8")
+                        v_store.add_document(rel_path, content)
+                    except Exception as e:
+                        pass
+                try:
+                    v_store.sync_index()
+                except Exception as e:
+                    print(f"[RepoIndexer] Background vector store sync failed: {e}")
+
+            # Fire and forget thread for embedding
+            thread = threading.Thread(target=_embed_and_sync, args=(vector_store, files_to_embed), daemon=True)
+            thread.start()
 
         summary = RepoIndexSummary(
             generated=True,
