@@ -72,7 +72,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--auto-repair",
         default="no",
         choices=["yes", "no"],
-        help="Allow at most one automatic repair attempt after an IMPLEMENT failure.",
+        help="Enable bounded automatic repair handling after an IMPLEMENT failure.",
+    )
+    parser.add_argument(
+        "--auto-repair-attempts",
+        type=int,
+        default=1,
+        help="Bounded number of command repair retries when auto-repair is enabled.",
     )
     parser.add_argument(
         "--approval-mode",
@@ -101,6 +107,7 @@ def main() -> None:
         command_policy=CommandPolicyMode(args.command_policy),
         preview_changes=args.preview_changes,
         auto_repair=args.auto_repair == "yes",
+        auto_repair_attempts=max(1, args.auto_repair_attempts),
         approval_mode=ApprovalMode(args.approval_mode),
     )
     print(format_result(result))

@@ -121,6 +121,14 @@ class LLMRetryTests(unittest.TestCase):
             )
         )
 
+    def test_invalid_phase_retried_then_accepted(self) -> None:
+        invalid_phase = VALID_PLAN_JSON.replace('"phase": "understand"', '"phase": "execution"')
+        engine, _ = self._engine([invalid_phase, VALID_PLAN_JSON])
+        result = engine.generate_plan_output("system", "user", "fallback")
+        self.assertIsNotNone(result.payload)
+        self.assertTrue(result.summary.accepted)
+        self.assertEqual(result.summary.attempts_used, 2)
+
     def test_retry_exhaustion_falls_back_cleanly(self) -> None:
         engine, _ = self._engine(["{}", "{}", "{}"])
         result = engine.generate_plan_output("system", "user", "fallback")

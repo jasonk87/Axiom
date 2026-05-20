@@ -32,6 +32,29 @@ class LLMSettingsManagerTests(unittest.TestCase):
             self.assertEqual(reloaded.model, "phi4-mini")
             self.assertEqual(reloaded.retry_limit, 3)
 
+    def test_gemini_settings_store_secret_but_public_dict_hides_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manager = LLMSettingsManager(Path(temp_dir))
+            updated = manager.update_settings(
+                {
+                    "enabled": True,
+                    "provider": "gemini",
+                    "base_url": "https://generativelanguage.googleapis.com/v1beta",
+                    "model": "gemini-2.5-flash-lite",
+                    "embedding_model": "gemini-embedding-001",
+                    "api_key": "test-key",
+                }
+            )
+
+            self.assertEqual(updated.provider, "gemini")
+            self.assertEqual(updated.api_key, "test-key")
+            public_payload = updated.to_dict()
+            self.assertTrue(public_payload["api_key_configured"])
+            self.assertNotIn("api_key", public_payload)
+
+            reloaded = LLMSettingsManager(Path(temp_dir)).get_settings()
+            self.assertEqual(reloaded.api_key, "test-key")
+
 
 if __name__ == "__main__":
     unittest.main()

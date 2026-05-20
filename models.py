@@ -498,6 +498,9 @@ class RepairSummary:
     auto_repair_enabled: bool
     eligible: bool
     reason: str
+    repair_attempt_limit: int = 1
+    repair_attempts_used: int = 0
+    repair_strategies_tried: list[str] = field(default_factory=list)
     repair_plan: Plan | None = None
     repair_step_results: list[StepResult] = field(default_factory=list)
     repair_execution_result: ExecutionResult | None = None
@@ -510,6 +513,9 @@ class RepairSummary:
             "auto_repair_enabled": self.auto_repair_enabled,
             "eligible": self.eligible,
             "reason": self.reason,
+            "repair_attempt_limit": self.repair_attempt_limit,
+            "repair_attempts_used": self.repair_attempts_used,
+            "repair_strategies_tried": self.repair_strategies_tried,
             "repair_plan": self.repair_plan.to_dict() if self.repair_plan else None,
             "repair_step_results": [
                 step.to_dict() for step in self.repair_step_results

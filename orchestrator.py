@@ -121,6 +121,7 @@ class Orchestrator:
         artifact_manager: ArtifactManager,
         artifact_references: list[ArtifactReference],
         auto_repair: bool,
+        auto_repair_attempts: int,
         initial_execution_result: ExecutionResult,
         step_results: list[StepResult],
         workspace: WorkspaceManager,
@@ -156,6 +157,7 @@ class Orchestrator:
             verification=verification,
             repo_index_summary=repo_index_summary,
             scope_manager=scope_manager,
+            repair_attempt_limit=auto_repair_attempts,
         )
         repair_summary = self._persist_repair_plan(
             artifact_manager,
@@ -171,6 +173,7 @@ class Orchestrator:
                 workspace=workspace,
                 terminal=terminal,
                 verification_manager=verification_manager,
+                max_attempts=auto_repair_attempts,
             )
             repair_summary = self._persist_repair_result(
                 artifact_manager,
@@ -1326,8 +1329,10 @@ class Orchestrator:
         command_policy: CommandPolicyMode = CommandPolicyMode.PERMISSIVE,
         preview_changes: bool = False,
         auto_repair: bool = False,
+        auto_repair_attempts: int = 1,
         approval_mode: ApprovalMode = ApprovalMode.NORMAL,
     ) -> TaskResult:
+        auto_repair_attempts = max(1, auto_repair_attempts)
         permissions = PermissionManager.for_mode(mode)
         verification = verification_config or VerificationConfig()
         artifact_manager = ArtifactManager(self.project_root)
@@ -1516,6 +1521,7 @@ class Orchestrator:
                             artifact_manager=artifact_manager,
                             artifact_references=artifact_references,
                             auto_repair=auto_repair,
+                            auto_repair_attempts=auto_repair_attempts,
                             initial_execution_result=initial_execution_result,
                             step_results=step_results,
                             workspace=workspace,
@@ -1562,6 +1568,7 @@ class Orchestrator:
                     verification=verification,
                     repo_index_summary=repo_index_summary,
                     scope_manager=scope_manager,
+                    repair_attempt_limit=auto_repair_attempts,
                 )
                 repair_summary = self._persist_repair_plan(
                     artifact_manager,

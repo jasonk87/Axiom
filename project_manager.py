@@ -65,7 +65,7 @@ class ProjectManager:
     def _load_projects(self) -> dict[str, ProjectRecord]:
         if not self.projects_path.exists():
             return {}
-        payload = json.loads(self.projects_path.read_text(encoding="utf-8"))
+        payload = json.loads(self.projects_path.read_text(encoding="utf-8-sig"))
         return {
             item["id"]: ProjectRecord(
                 id=item["id"],
@@ -80,7 +80,7 @@ class ProjectManager:
     def _load_context(self) -> dict:
         if not self.context_path.exists():
             return {"active_project_id": None, "active_session_id": None}
-        payload = json.loads(self.context_path.read_text(encoding="utf-8"))
+        payload = json.loads(self.context_path.read_text(encoding="utf-8-sig"))
         return {
             "active_project_id": payload.get("active_project_id"),
             "active_session_id": payload.get("active_session_id"),
@@ -95,7 +95,7 @@ class ProjectManager:
                 ).to_dict(),
                 "project_memories": {},
             }
-        payload = json.loads(self.memory_path.read_text(encoding="utf-8"))
+        payload = json.loads(self.memory_path.read_text(encoding="utf-8-sig"))
         return {
             "global_memory": payload.get(
                 "global_memory",

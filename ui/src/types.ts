@@ -37,6 +37,8 @@ export type LLMSettings = {
   compression_enabled: boolean;
   compression_threshold: number;
   embedding_model: string;
+  api_key?: string;
+  api_key_configured?: boolean;
 };
 
 export type LLMStructuredSummary = {
@@ -224,6 +226,7 @@ export type PrepareRunRequest = {
   previewChanges: boolean;
   buildRepoIndex: boolean;
   autoRepair: boolean;
+  autoRepairAttempts: number;
   scopePaths: string[];
   protectedPaths: string[];
 };
