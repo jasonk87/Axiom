@@ -19,6 +19,7 @@ PLAN_STEP_KEYS = {
     "approval_hint",
 }
 VALID_STEP_TYPES = {"discovery", "execution", "verification"}
+VALID_PLAN_PHASES = {"understand", "modify", "verify"}
 REVIEW_TOP_LEVEL_KEYS = {
     "verdict",
     "summary",
@@ -143,6 +144,14 @@ def validate_plan_payload(payload: dict[str, Any]) -> list[LLMValidationIssue]:
                     code="wrong_type",
                     message="Step type must be discovery, execution, or verification.",
                     path=f"{path}.type",
+                )
+            )
+        if "phase" in step and step["phase"] not in VALID_PLAN_PHASES:
+            issues.append(
+                LLMValidationIssue(
+                    code="invalid_value",
+                    message="Step phase must be understand, modify, or verify.",
+                    path=f"{path}.phase",
                 )
             )
         for string_key in [

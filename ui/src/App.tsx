@@ -61,17 +61,17 @@ const DEFAULT_LAYOUT: LayoutState = {
 };
 
 const DEFAULT_LLM_SETTINGS: LLMSettings = {
-  enabled: false,
+  enabled: true,
   review_enabled: true,
-  provider: "ollama",
-  base_url: "http://127.0.0.1:11434",
-  model: "gemma-4",
-  timeout_seconds: 20,
+  provider: "gemini",
+  base_url: "https://generativelanguage.googleapis.com/v1beta",
+  model: "gemini-2.5-flash-lite",
+  timeout_seconds: 60,
   retry_limit: 2,
   temperature: 0.1,
   compression_enabled: true,
   compression_threshold: 5,
-  embedding_model: "nomic-embed-text",
+  embedding_model: "gemini-embedding-001",
 };
 
 function splitList(raw: string): string[] {
@@ -148,7 +148,26 @@ function previewSummary(change: PreviewFileChange): string {
 function modelChipLabel(settings: LLMSettings | null): string {
   if (!settings) return "AI settings";
   if (!settings.enabled) return "AI off";
-  return `${settings.provider} / ${settings.model}`;
+  return `${settings.provider} / ${settings.model}${settings.provider === "gemini" && !settings.api_key_configured ? " / key needed" : ""}`;
+}
+
+function defaultsForProvider(provider: string): Partial<LLMSettings> {
+  if (provider === "gemini") {
+    return {
+      provider,
+      base_url: "https://generativelanguage.googleapis.com/v1beta",
+      model: "gemini-2.5-flash-lite",
+      embedding_model: "gemini-embedding-001",
+      timeout_seconds: 60,
+    };
+  }
+  return {
+    provider,
+    base_url: "http://127.0.0.1:11434",
+    model: "llama3.2:3b",
+    embedding_model: "nomic-embed-text",
+    timeout_seconds: 20,
+  };
 }
 
 function buildPreviewDetails(changes: PreviewFileChange[] | undefined): ReactNode {
@@ -1560,7 +1579,8 @@ export default function App() {
           <div className="advanced-grid">
             <label>
               Provider
-              <select value={llmSettings.provider} onChange={(event) => setLlmSettings((current) => ({ ...current, provider: event.target.value }))}>
+              <select value={llmSettings.provider} onChange={(event) => setLlmSettings((current) => ({ ...current, ...defaultsForProvider(event.target.value) }))}>
+                <option value="gemini">gemini</option>
                 <option value="ollama">ollama</option>
               </select>
             </label>
@@ -1572,6 +1592,17 @@ export default function App() {
               Base URL
               <input value={llmSettings.base_url} onChange={(event) => setLlmSettings((current) => ({ ...current, base_url: event.target.value }))} />
             </label>
+            {llmSettings.provider === "gemini" ? (
+              <label>
+                API key
+                <input
+                  type="password"
+                  value={llmSettings.api_key ?? ""}
+                  onChange={(event) => setLlmSettings((current) => ({ ...current, api_key: event.target.value }))}
+                  placeholder={llmSettings.api_key_configured ? "Stored key configured" : "Gemini API key"}
+                />
+              </label>
+            ) : null}
             <label>
               Retry limit
               <input
@@ -1586,7 +1617,7 @@ export default function App() {
           <div className="toggle-stack">
             <label className="toggle">
               <input type="checkbox" checked={llmSettings.enabled} onChange={(event) => setLlmSettings((current) => ({ ...current, enabled: event.target.checked }))} />
-              Enable local planning
+              Enable AI planning
             </label>
             <label className="toggle">
               <input type="checkbox" checked={llmSettings.review_enabled} onChange={(event) => setLlmSettings((current) => ({ ...current, review_enabled: event.target.checked }))} />
